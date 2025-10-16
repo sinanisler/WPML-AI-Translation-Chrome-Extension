@@ -27,7 +27,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Setup event listeners
 function setupEventListeners() {
-  document.getElementById('refresh-models').addEventListener('click', loadModels);
   document.getElementById('save-settings').addEventListener('click', saveAllSettings);
   document.getElementById('api-key').addEventListener('input', handleApiKeyInput);
 }
@@ -35,15 +34,12 @@ function setupEventListeners() {
 // Handle API key input changes
 function handleApiKeyInput() {
   const apiKey = document.getElementById('api-key').value.trim();
-  const refreshButton = document.getElementById('refresh-models');
   const modelSelect = document.getElementById('model-select');
   
   if (apiKey && apiKey.startsWith('sk-')) {
-    refreshButton.disabled = false;
     modelSelect.disabled = false;
     loadModels();
   } else {
-    refreshButton.disabled = true;
     modelSelect.disabled = true;
     const modelList = document.getElementById('model-list');
     modelList.innerHTML = '<option value="Enter valid API key first"></option>';
@@ -58,7 +54,6 @@ async function loadSavedSettings() {
     // Load API key
     if (result.apiKey) {
       document.getElementById('api-key').value = result.apiKey;
-      document.getElementById('refresh-models').disabled = false;
       document.getElementById('model-select').disabled = false;
       // Update status AFTER the DOM is fully ready
       setTimeout(() => updateApiKeyStatus(true), 100);
@@ -87,7 +82,6 @@ async function loadModels() {
   const apiKey = document.getElementById('api-key').value.trim();
   const modelSelect = document.getElementById('model-select');
   const modelList = document.getElementById('model-list');
-  const refreshButton = document.getElementById('refresh-models');
   
   if (!apiKey) {
     showStatus('Please enter API key first', 'error');
@@ -96,7 +90,7 @@ async function loadModels() {
   
   // Show loading state
   modelList.innerHTML = '<option value="Loading models..."></option>';
-  refreshButton.disabled = true;
+  modelSelect.disabled = true;
   
   try {
     const response = await fetch('https://api.openai.com/v1/models', {
@@ -152,7 +146,7 @@ async function loadModels() {
     modelList.innerHTML = '<option value="Error loading models"></option>';
     showStatus('Error loading models. Check your API key.', 'error');
   } finally {
-    refreshButton.disabled = false;
+    modelSelect.disabled = false;
   }
 }
 
@@ -185,8 +179,7 @@ async function saveAllSettings() {
     showStatus('All settings saved successfully!', 'success');
     updateModelInfo(selectedModel);
     
-    // Enable model controls if not already
-    document.getElementById('refresh-models').disabled = false;
+    // Enable model select if not already
     document.getElementById('model-select').disabled = false;
     
   } catch (error) {

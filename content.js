@@ -98,11 +98,17 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
           currentAbortController = null;
         }
         
-        // Re-enable any disabled buttons
+        // Re-enable any disabled buttons and remove working class
         const translateBtn = document.querySelector(".translate-wpm-button");
         const autoTranslateBtn = document.querySelector(".auto-translate-button");
-        if (translateBtn) translateBtn.disabled = false;
-        if (autoTranslateBtn) autoTranslateBtn.disabled = false;
+        if (translateBtn) {
+          translateBtn.disabled = false;
+          translateBtn.classList.remove('working');
+        }
+        if (autoTranslateBtn) {
+          autoTranslateBtn.disabled = false;
+          autoTranslateBtn.classList.remove('working');
+        }
         
         console.log("Translation stopped by user - immediate abort");
       });
@@ -137,21 +143,35 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
     }
 
     const translationSpans = document.querySelectorAll(".translation div span");
-    const button = autoTranslate ? document.querySelector(".auto-translate-button") : document.querySelector(".translate-wpm-button");
+    const translateBtn = document.querySelector(".translate-wpm-button");
+    const autoTranslateBtn = document.querySelector(".auto-translate-button");
 
     if (originalText && translationSpans && translationSpans.length > 1) {
       const targetLanguage = translationSpans[1].textContent;
-      button.disabled = true; // Disable the button
-      await sendToOpenAI(originalText, targetLanguage, button, autoTranslate);
+      
+      // Disable both buttons during translation
+      if (translateBtn) {
+        translateBtn.disabled = true;
+        if (!autoTranslate) translateBtn.classList.add('working');
+      }
+      if (autoTranslateBtn) {
+        autoTranslateBtn.disabled = true;
+        if (autoTranslate) autoTranslateBtn.classList.add('working');
+      }
+      
+      await sendToOpenAI(originalText, targetLanguage, autoTranslate);
     } else {
       console.log("Required elements not found for translation.");
       alert("Could not find text to translate. Please make sure you're on a WPML translation page.");
     }
   };
 
-  const sendToOpenAI = async (originalText, targetLanguage, button, autoTranslate) => {
+  const sendToOpenAI = async (originalText, targetLanguage, autoTranslate) => {
     // Create a new AbortController for this request
     currentAbortController = new AbortController();
+    
+    const translateBtn = document.querySelector(".translate-wpm-button");
+    const autoTranslateBtn = document.querySelector(".auto-translate-button");
 
     try {
       // Early check for stop flag
@@ -265,7 +285,15 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
       console.error("Error with OpenAI API:", error);
       alert(`Translation failed: ${error.message}`);
     } finally {
-      button.disabled = false; // Re-enable the button
+      // Re-enable both buttons and remove working class
+      if (translateBtn) {
+        translateBtn.disabled = false;
+        translateBtn.classList.remove('working');
+      }
+      if (autoTranslateBtn) {
+        autoTranslateBtn.disabled = false;
+        autoTranslateBtn.classList.remove('working');
+      }
       currentAbortController = null; // Clear the controller
       // Note: Don't reset stopTranslation here to preserve user intent
     }
