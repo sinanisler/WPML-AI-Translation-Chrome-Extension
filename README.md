@@ -1,6 +1,6 @@
 # WPML AI Translation Chrome Extension
 
-A Chrome extension that adds AI-powered translation capabilities to WPML (WordPress Multilingual Plugin) translation pages using OpenAI's API.
+A Chrome extension that adds AI-powered translation capabilities to WPML (WordPress Multilingual Plugin) translation pages using OpenAI or OpenRouter APIs.
 
 <img width="568" height="363" alt="image" src="https://github.com/user-attachments/assets/80c6197d-460c-4cfc-a761-a5281dc7dca4" />
 
@@ -13,22 +13,32 @@ A Chrome extension that adds AI-powered translation capabilities to WPML (WordPr
 
 ## Features
 
-### 🚀 Recent Improvements (v2.0)
+### 🚀 Latest Features (v1.2)
 
-- **Dynamic Model Support**: Automatically loads available OpenAI models from your API key
-- **Improved Popup UI**: Clean, modern interface with better UX
-- **Custom System Prompts**: Editable system prompts for better translation control
-- **Real-time Settings**: Settings sync instantly without page refresh
-- **Better Error Handling**: Clear error messages and validation
-- **API Key Status**: Visual indicator showing if API key is saved
-- **Model Information**: Display model owner and creation date
+#### Dual Provider Support
+- **OpenAI Integration**: Direct access to OpenAI's GPT models
+- **OpenRouter Integration**: Access to multiple AI providers through OpenRouter
+- **Seamless Switching**: Easily switch between providers with separate API key storage
+- **Provider-Specific Models**: Automatically loads available models based on selected provider
 
-### Core Features
+#### Advanced Translation Control
+- **Dynamic Model Loading**: Automatically fetches available models from your API provider
+- **Custom System Prompts**: Full control over translation behavior with editable prompts
+- **Intelligent Translation Rules**: Built-in rules to preserve brand names, HTML tags, and proper nouns
+- **Real-time Settings Sync**: Changes apply instantly without page refresh
 
-- **Single Translation**: Translate individual text segments
-- **Auto Translation**: Automatically translate and save multiple segments
-- **Stop Functionality**: Ability to stop auto-translation at any time
-- **Real-time Updates**: Settings changes apply immediately
+#### User Interface
+- **Modern Popup Design**: Clean, intuitive interface with proper form validation
+- **API Key Status Indicator**: Visual confirmation when API keys are saved
+- **Model Information Display**: Shows model details like context length and ownership
+- **Provider Selection**: Easy toggle between OpenAI and OpenRouter
+
+#### Core Translation Features
+- **AI Translate**: Translate individual text segments with one click
+- **AI Translate All**: Automatically translate and save multiple segments in sequence
+- **Stop Functionality**: Immediate abort of ongoing translations with proper cleanup
+- **Visual Feedback**: Animated buttons show translation progress
+- **Error Handling**: Clear error messages and validation throughout
 
 ## Installation
 
@@ -40,112 +50,278 @@ A Chrome extension that adds AI-powered translation capabilities to WPML (WordPr
 
 ## Setup
 
+### Quick Start
+
 1. Click the extension icon in your Chrome toolbar
-2. Enter your OpenAI API key (starts with `sk-`)
-3. Select your preferred AI model from the dropdown
-4. Customize the system prompt if desired (optional)
-5. Click "Save Settings"
+2. Choose your preferred provider (OpenAI or OpenRouter)
+3. Enter your API key:
+   - **OpenAI**: Get from [platform.openai.com](https://platform.openai.com/api-keys)
+   - **OpenRouter**: Get from [openrouter.ai/keys](https://openrouter.ai/keys)
+4. The model list will load automatically
+5. Select your preferred AI model from the dropdown
+6. (Optional) Customize the system prompt to control translation behavior
+7. Click "Save All Settings"
+
+### System Prompt Configuration
+
+The extension includes a sophisticated default system prompt that:
+- Ensures clean, translation-only output
+- Preserves brand names, proper nouns, and technical terms
+- Maintains HTML structure and formatting
+- Avoids adding unnecessary explanations or commentary
+
+You can customize this prompt in the settings to match your specific translation needs.
 
 ## Usage
 
-1. Navigate to a WPML translation page
-2. The extension will automatically add three buttons:
-   - **Translate with AI**: Translate the current text segment
-   - **Auto Translate**: Automatically translate all remaining segments
-   - **Stop**: Stop the auto-translation process
+### On WPML Translation Pages
 
-### System Prompt
+1. Navigate to any WPML translation page (`*.ate.wpml.org/dashboard*`)
+2. The extension automatically adds three buttons to the interface:
 
-The default system prompt is:
-```
-Translate the following text into the desired language. If the text is already in the desired language or too short, return it exactly as-is, without any changes or annotations. Maintain any syntax or HTML tags. Never add language names, comments, or suggestions.
-```
+   - **AI Translate**: Translate the current text segment
+   - **AI Translate All**: Automatically translate all remaining segments sequentially
+   - **Stop**: Immediately stop the auto-translation process
 
-You can customize this prompt in the extension popup to better suit your translation needs.
+### Translation Workflow
+
+**Single Translation:**
+1. Review the source text
+2. Click "AI Translate"
+3. The translated text appears in the editor
+4. Review and save manually
+
+**Batch Translation:**
+1. Click "AI Translate All"
+2. Watch as segments are translated and saved automatically
+3. Click "Stop" at any time to pause the process
+4. Translation stops immediately with proper cleanup
 
 ## Supported Models
 
-The extension automatically loads all available models from your OpenAI account, including:
-- GPT-4 models (recommended for best quality)
-- GPT-3.5 models
-- Other compatible text generation models
+### OpenAI Models
+The extension automatically loads all available models from your OpenAI account:
+- **GPT-4 Series**: Latest models (gpt-4, gpt-4-turbo, etc.) - recommended for highest quality
+- **GPT-3.5 Series**: Faster and more cost-effective options
+- **Other Models**: Any compatible text generation models in your account
+
+### OpenRouter Models
+Access to a wide variety of models from multiple providers:
+- OpenAI models (GPT-4, GPT-3.5, etc.)
+- Anthropic Claude models
+- Google models
+- Meta Llama models
+- And many more providers
+
+The extension displays model context length and other relevant information to help you choose.
 
 ## Requirements
 
-- Chrome browser
-- Valid OpenAI API key
-- Access to WPML translation pages
+- **Browser**: Chrome or Chromium-based browser
+- **API Access**: Valid API key from either:
+  - OpenAI account with available credits
+  - OpenRouter account with available credits
+- **Website**: Access to WPML translation pages (`*.ate.wpml.org/dashboard*`)
 
 ## Settings Storage
 
-All settings are stored locally in Chrome's sync storage:
-- API Key (encrypted by Chrome)
-- Selected Model
-- Custom System Prompt
+All settings are securely stored using Chrome's sync storage:
+- **OpenAI API Key** (encrypted by Chrome)
+- **OpenRouter API Key** (encrypted by Chrome)
+- **Selected Models** (separate for each provider)
+- **Custom System Prompt**
+- **Provider Selection**
 
-Settings sync across your Chrome instances if you're signed into Chrome.
+Settings automatically sync across your Chrome instances when signed into Chrome.
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **"Please configure your OpenAI API key"**
-   - Open the extension popup and enter a valid API key
+1. **"Please configure your API key"**
+   - Open the extension popup
+   - Select your provider (OpenAI or OpenRouter)
+   - Enter a valid API key
+   - Click "Save All Settings"
 
 2. **"Error loading models"**
-   - Check that your API key is valid and has sufficient credits
-   - Ensure you have internet connectivity
+   - Verify your API key is correct and active
+   - Check that your account has sufficient credits
+   - Ensure stable internet connectivity
+   - For OpenRouter: Make sure you've added credits to your account
 
 3. **Translation buttons not appearing**
-   - Make sure you're on a WPML translation page
-   - Refresh the page and wait a few seconds
+   - Confirm you're on a WPML translation page (`*.ate.wpml.org/dashboard*`)
+   - Refresh the page (F5)
+   - Wait a few seconds for the page to fully load
+   - Check browser console (F12) for any errors
 
-4. **Translation fails**
-   - Check your OpenAI account credits and usage limits
-   - Verify the selected model is available for your account
+4. **Translation fails or returns errors**
+   - **API Credits**: Verify your account has available credits
+   - **Rate Limits**: You may be hitting API rate limits
+   - **Model Access**: Ensure the selected model is available for your account tier
+   - **Network**: Check for firewall or proxy issues blocking API requests
+
+5. **Settings not saving**
+   - Make sure to click "Save All Settings" button
+   - Check that you've selected a model from the dropdown
+   - Verify the system prompt is not empty
+
+6. **Stop button not working**
+   - The extension uses immediate abort functionality
+   - Current request stops within milliseconds
+   - If auto-translate continues, refresh the page
 
 ### Debug Information
 
-Check the browser console (F12) for detailed error messages and logs.
+1. Open browser Developer Tools (F12)
+2. Go to Console tab
+3. Look for messages starting with:
+   - "Settings loaded:" - Shows loaded configuration
+   - "Translation stopped" - Confirms stop action
+   - "Error with OpenAI API:" - Shows API errors
+4. Check Network tab for failed API requests
+
+### API Key Validation
+
+- **OpenAI keys** start with `sk-` or `sk-proj-`
+- **OpenRouter keys** start with `sk-or-v1-`
+- Keys are stored securely and encrypted by Chrome
+- Each provider stores its key separately
 
 ## Development
 
 ### File Structure
 ```
-├── manifest.json          # Extension configuration
+├── manifest.json          # Extension configuration (Manifest V3)
 ├── popup.html             # Extension popup interface
-├── popup.js              # Popup functionality and settings
-├── content.js            # Main translation logic
-├── background.js         # Background service worker
-├── style.css             # Button and UI styling
-└── README.md            # This file
+├── popup.js              # Popup functionality, settings, and API integration
+├── content.js            # Main translation logic and WPML page integration
+├── background.js         # Background service worker (minimal)
+├── style.css             # Button styling and animations
+├── icon16.png           # Extension icon (16x16)
+├── icon48.png           # Extension icon (48x48)
+├── icon128.png          # Extension icon (128x128)
+├── license.txt          # License information
+└── README.md            # Documentation
 ```
 
-### Key Features in Code
+### Key Technical Features
 
-- **Dynamic Model Loading**: Fetches models from OpenAI API
-- **Real-time Settings Sync**: Uses Chrome storage change listeners
-- **Improved Error Handling**: Comprehensive try-catch blocks
-- **Modern UI**: CSS Grid and Flexbox layouts
-- **Accessibility**: Proper ARIA labels and focus management
+#### Provider Architecture
+- **Dual Provider Support**: Separate storage for OpenAI and OpenRouter credentials
+- **Dynamic API Endpoints**: Automatically switches between provider endpoints
+- **Model Loading**: Provider-specific model fetching and formatting
+
+#### Translation Engine
+- **AbortController**: Immediate cancellation of in-flight API requests
+- **Real-time Sync**: Chrome storage listeners for instant settings updates
+- **Error Recovery**: Comprehensive try-catch blocks with user feedback
+- **State Management**: Proper cleanup on stop/abort actions
+
+#### UI/UX Features
+- **Modern CSS**: Grid and Flexbox layouts with smooth transitions
+- **Visual Feedback**: Animated buttons with loading states (⚡ icon rotation)
+- **Form Validation**: Input validation before API calls
+- **Accessibility**: Proper ARIA labels and keyboard navigation
+- **Responsive Design**: Mobile-friendly popup interface
+
+#### Security
+- **Chrome Storage Sync**: Encrypted API key storage
+- **Input Sanitization**: Proper validation of user inputs
+- **HTTPS Only**: All API calls use secure connections
+- **No Data Collection**: Extension doesn't collect or transmit user data
+
+### Extension Permissions
+
+```json
+"permissions": [
+  "activeTab",    // Access to current WPML translation page
+  "storage"       // Store settings and API keys
+]
+```
+
+### Content Script Injection
+
+The extension only runs on WPML translation pages:
+```javascript
+"matches": ["*://*.ate.wpml.org/dashboard*"]
+```
+
+This ensures the extension only activates when needed, minimizing resource usage.
 
 ## License
 
 See `license.txt` for license information.
 
+## Support
+
+- ❤ [Support this project on GitHub Sponsors](https://github.com/sponsors/sinanisler)
+- 🐛 [Report bugs or request features](https://github.com/sinanisler/WPML-AI-Translation-Chrome-Extension/issues)
+- ⭐ Star this repository if you find it helpful!
+
 ## Changelog
 
-### v2.0 (Latest)
-- Complete UI overhaul with modern design
-- Dynamic OpenAI model loading
-- Editable system prompts
-- Real-time settings synchronization
-- Improved error handling and user feedback
-- Better button styling and animations
-- API key status indicator
+### v1.2 (Current)
+#### Major Features
+- ✨ **Dual Provider Support**: Added OpenRouter alongside OpenAI
+- 🔄 **Provider Switching**: Seamlessly switch between providers with independent settings
+- 🎯 **Separate API Key Storage**: Each provider maintains its own API key and model selection
+- 🚀 **Dynamic Model Loading**: Fetches available models based on selected provider
+- 📊 **Enhanced Model Info**: Displays context length, ownership, and creation dates
+
+#### Improvements
+- 🎨 **UI Refinements**: Radio buttons for provider selection
+- 🔐 **Better Security**: Provider-specific encrypted key storage
+- ⚡ **Performance**: Optimized model loading and caching
+- 🛡️ **Error Handling**: Provider-specific error messages
+- 📝 **System Prompt**: Updated default prompt with better translation rules
+
+#### Bug Fixes
+- Fixed model list not updating when switching providers
+- Fixed API key status not reflecting correct provider
+- Improved stop button immediate abort functionality
 
 ### v1.0
-- Basic translation functionality
-- Static model selection (gpt-4o)
-- Simple popup interface
-- Auto-translation feature
+- 🎉 Initial release
+- ✅ Basic OpenAI integration
+- ✅ Single and auto-translation features
+- ✅ Custom system prompts
+- ✅ Stop functionality
+- ✅ Modern popup UI
+
+## Roadmap
+
+Planned features for future releases:
+
+- [ ] Translation memory/cache to reduce API costs
+- [ ] Glossary support for consistent term translation
+- [ ] Translation history and undo functionality
+- [ ] Batch export/import of translations
+- [ ] Custom API endpoint configuration
+- [ ] Translation quality scoring
+- [ ] Multi-language simultaneous translation
+- [ ] Statistics dashboard (costs, usage, etc.)
+
+## Contributing
+
+Contributions are welcome! Please feel free to:
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## Credits
+
+Developed by [Sinan Isler](https://github.com/sinanisler)
+
+Built with:
+- Chrome Extension Manifest V3
+- OpenAI API
+- OpenRouter API
+- Modern JavaScript (ES6+)
+- Chrome Storage API
+
+---
+
+**Note**: This extension requires valid API keys and active credits from OpenAI and/or OpenRouter. API usage costs are determined by your provider's pricing structure.
