@@ -88,14 +88,14 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
 
       // Add "Translate with AI" button
       const translateButton = document.createElement("button");
-      translateButton.textContent = "Translate with AI";
+      translateButton.textContent = "AI Translate";
       translateButton.className = "translate-wpm-button";
       translateButton.addEventListener("click", () => translateWithAI(false));
       targetElement.appendChild(translateButton);
 
       // Add "Auto Translate" button
       const autoTranslateButton = document.createElement("button");
-      autoTranslateButton.textContent = "Auto Translate";
+      autoTranslateButton.textContent = "Auto Translate All";
       autoTranslateButton.className = "auto-translate-button";
       autoTranslateButton.addEventListener("click", () => translateWithAI(true));
       targetElement.appendChild(autoTranslateButton);
