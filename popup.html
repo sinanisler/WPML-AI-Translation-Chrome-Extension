@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OpenAI WPML</title>
+  <title>WPML AI Translation</title>
   <style>
     body {
-      min-width: 350px;
-      max-width: 500px;
+      min-width: 500px;
+      max-width: 600px;
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 14px;
-      line-height: 1.4;
+      line-height: 1.5;
       background: #f8f9fa;
     }
 
@@ -21,78 +21,88 @@
     }
 
     h3 {
-      margin: 0 0 20px 0;
+      margin: 0 0 10px 0;
       color: #333;
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 600;
+      line-height:1;
     }
 
     .section {
-      margin-bottom: 20px;
-      padding-bottom: 15px;
-      border-bottom: 1px solid #eee;
+      margin-bottom: 4px;
     }
 
     .section:last-child {
       border-bottom: none;
       margin-bottom: 0;
+      padding-bottom: 0;
     }
 
     label {
       display: block;
-      margin-bottom: 5px;
+      margin-bottom: 8px;
       font-weight: 500;
       color: #555;
+      font-size: 14px;
     }
 
-    input[type="text"], input[type="password"], select, textarea {
+    input, input[type="text"], input[type="password"], select, textarea {
       width: 100%;
-      padding: 8px 12px;
+      padding: 10px 14px;
       border: 1px solid #ddd;
-      border-radius: 4px;
+      border-radius: 6px;
       font-size: 14px;
       box-sizing: border-box;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      font-family: inherit;
     }
 
     input[type="text"]:focus, input[type="password"]:focus, select:focus, textarea:focus {
       outline: none;
       border-color: #27ad95;
-      box-shadow: 0 0 0 2px rgba(39, 173, 149, 0.1);
+      box-shadow: 0 0 0 3px rgba(39, 173, 149, 0.1);
     }
 
     textarea {
       resize: vertical;
-      min-height: 80px;
-      font-family: inherit;
+      min-height: 100px;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      line-height: 1.1;
+      font-size: 13px;
     }
 
     .button {
       background: #27ad95;
       color: white;
       border: none;
-      padding: 10px 16px;
-      border-radius: 4px;
+      padding: 11px 18px;
+      border-radius: 6px;
       cursor: pointer;
       font-size: 14px;
       font-weight: 500;
-      transition: background-color 0.2s;
+      transition: background-color 0.2s, transform 0.1s;
       width: 100%;
-      margin-top: 8px;
+      margin-top: 10px;
     }
 
     .button:hover {
       background: #229982;
+      transform: translateY(-1px);
+    }
+
+    .button:active {
+      transform: translateY(0);
     }
 
     .button:disabled {
       background: #ccc;
       cursor: not-allowed;
+      transform: none;
     }
 
     .button.secondary {
       background: #6c757d;
-      margin-top: 5px;
+      margin-top: 8px;
     }
 
     .button.secondary:hover {
@@ -100,9 +110,9 @@
     }
 
     .status {
-      margin-top: 10px;
-      padding: 8px 12px;
-      border-radius: 4px;
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 6px;
       font-size: 13px;
       font-weight: 500;
       display: none;
@@ -128,9 +138,9 @@
 
     .api-key-status {
       display: inline-block;
-      margin-left: 8px;
-      font-size: 12px;
-      font-weight: 500;
+      margin-left: 10px;
+      font-size: 13px;
+      font-weight: 600;
     }
 
     .api-key-status.saved {
@@ -144,7 +154,10 @@
     .model-info {
       font-size: 12px;
       color: #666;
-      margin-top: 4px;
+      margin-top: 6px;
+      padding: 6px 10px;
+      background: #f8f9fa;
+      border-radius: 4px;
     }
 
     .loading {
@@ -166,6 +179,32 @@
     .hidden {
       display: none !important;
     }
+
+    .help-text {
+      font-size: 12px;
+      color: #666;
+      margin-top: 6px;
+      font-style: italic;
+    }
+
+    .footer {
+      background: #f8f9fa;
+      padding: 16px 24px;
+      text-align: center;
+      border-top: 1px solid #eee;
+    }
+
+    .footer a {
+      color: #27ad95;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+
+    .footer a:hover {
+      color: #229982;
+    }
   </style>
 </head>
 
@@ -179,14 +218,14 @@
         <span id="api-key-status" class="api-key-status"></span>
       </label>
       <input type="password" id="api-key" placeholder="sk-...">
-      <button id="save-api-key" class="button">Save API Key</button>
     </div>
 
     <div class="section">
       <label for="model-select">AI Model</label>
-      <select id="model-select" disabled>
-        <option value="">Loading models...</option>
-      </select>
+      <input list="model-list" id="model-select" placeholder="Type to search models (e.g., gpt-4o)..." disabled>
+      <datalist id="model-list">
+        <option value="Loading models..."></option>
+      </datalist>
       <button id="refresh-models" class="button secondary" disabled>Refresh Models</button>
       <div id="model-info" class="model-info"></div>
     </div>
@@ -194,10 +233,15 @@
     <div class="section">
       <label for="system-prompt">System Prompt</label>
       <textarea id="system-prompt" placeholder="Enter your custom system prompt..."></textarea>
-      <button id="save-settings" class="button">Save Settings</button>
+      <div class="help-text">This prompt guides how the AI translates your content.</div>
+      <button id="save-settings" class="button">Save All Settings</button>
     </div>
 
     <div id="status" class="status"></div>
+  </div>
+
+  <div class="footer">
+    <a href="https://github.com/sponsors/sinanisler" target="_blank">❤ Support Project</a>
   </div>
 
   <script src="/popup.js"></script>

@@ -2,7 +2,7 @@
 // Currently minimal - could be expanded for additional functionality
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('WPML AI Translation Extension installed');
+  console.log('AI Translation Extension installed');
 });
 
 // Optional: Handle extension icon click

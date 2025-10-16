@@ -9,9 +9,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Setup event listeners
 function setupEventListeners() {
-  document.getElementById('save-api-key').addEventListener('click', saveApiKey);
   document.getElementById('refresh-models').addEventListener('click', loadModels);
-  document.getElementById('save-settings').addEventListener('click', saveSettings);
+  document.getElementById('save-settings').addEventListener('click', saveAllSettings);
   document.getElementById('api-key').addEventListener('input', handleApiKeyInput);
 }
 
@@ -28,7 +27,8 @@ function handleApiKeyInput() {
   } else {
     refreshButton.disabled = true;
     modelSelect.disabled = true;
-    modelSelect.innerHTML = '<option value="">Enter valid API key first</option>';
+    const modelList = document.getElementById('model-list');
+    modelList.innerHTML = '<option value="Enter valid API key first"></option>';
   }
 }
 
@@ -40,12 +40,13 @@ async function loadSavedSettings() {
     // Load API key
     if (result.apiKey) {
       document.getElementById('api-key').value = result.apiKey;
-      updateApiKeyStatus(true);
       document.getElementById('refresh-models').disabled = false;
       document.getElementById('model-select').disabled = false;
+      // Update status AFTER the DOM is fully ready
+      setTimeout(() => updateApiKeyStatus(true), 100);
       await loadModels();
     } else {
-      updateApiKeyStatus(false);
+      setTimeout(() => updateApiKeyStatus(false), 100);
     }
     
     // Load selected model
@@ -63,40 +64,11 @@ async function loadSavedSettings() {
   }
 }
 
-// Save API key
-async function saveApiKey() {
-  const apiKey = document.getElementById('api-key').value.trim();
-  
-  if (!apiKey) {
-    showStatus('Please enter an API key', 'error');
-    return;
-  }
-  
-  if (!apiKey.startsWith('sk-')) {
-    showStatus('Invalid API key format', 'error');
-    return;
-  }
-  
-  try {
-    await chrome.storage.sync.set({ apiKey });
-    updateApiKeyStatus(true);
-    showStatus('API key saved successfully!', 'success');
-    
-    // Enable model loading
-    document.getElementById('refresh-models').disabled = false;
-    document.getElementById('model-select').disabled = false;
-    await loadModels();
-    
-  } catch (error) {
-    console.error('Error saving API key:', error);
-    showStatus('Error saving API key', 'error');
-  }
-}
-
 // Load available models from OpenAI API
 async function loadModels() {
   const apiKey = document.getElementById('api-key').value.trim();
   const modelSelect = document.getElementById('model-select');
+  const modelList = document.getElementById('model-list');
   const refreshButton = document.getElementById('refresh-models');
   
   if (!apiKey) {
@@ -105,7 +77,7 @@ async function loadModels() {
   }
   
   // Show loading state
-  modelSelect.innerHTML = '<option value="">Loading models...</option>';
+  modelList.innerHTML = '<option value="Loading models..."></option>';
   refreshButton.disabled = true;
   
   try {
@@ -134,19 +106,18 @@ async function loadModels() {
         return a.id.localeCompare(b.id);
       });
     
-    // Populate select options
-    modelSelect.innerHTML = '<option value="">Select a model...</option>';
+    // Populate datalist options
+    modelList.innerHTML = '';
     
     models.forEach(model => {
       const option = document.createElement('option');
       option.value = model.id;
-      option.textContent = model.id;
       
       // Add additional info as data attributes
       option.dataset.ownedBy = model.owned_by;
       option.dataset.created = model.created;
       
-      modelSelect.appendChild(option);
+      modelList.appendChild(option);
     });
     
     // Restore previously selected model
@@ -160,23 +131,26 @@ async function loadModels() {
     
   } catch (error) {
     console.error('Error loading models:', error);
-    modelSelect.innerHTML = '<option value="">Error loading models</option>';
+    modelList.innerHTML = '<option value="Error loading models"></option>';
     showStatus('Error loading models. Check your API key.', 'error');
   } finally {
     refreshButton.disabled = false;
   }
 }
 
-// Save all settings
-async function saveSettings() {
-  const selectedModel = document.getElementById('model-select').value;
+// Save all settings (API key, model, and system prompt)
+async function saveAllSettings() {
+  const apiKey = document.getElementById('api-key').value.trim();
+  const selectedModel = document.getElementById('model-select').value.trim();
   const systemPrompt = document.getElementById('system-prompt').value.trim();
   
+  // Validate model
   if (!selectedModel) {
     showStatus('Please select a model', 'error');
     return;
   }
   
+  // Validate system prompt
   if (!systemPrompt) {
     showStatus('Please enter a system prompt', 'error');
     return;
@@ -184,12 +158,18 @@ async function saveSettings() {
   
   try {
     await chrome.storage.sync.set({
+      apiKey,
       selectedModel,
       systemPrompt
     });
     
-    showStatus('Settings saved successfully!', 'success');
+    updateApiKeyStatus(true);
+    showStatus('All settings saved successfully!', 'success');
     updateModelInfo(selectedModel);
+    
+    // Enable model controls if not already
+    document.getElementById('refresh-models').disabled = false;
+    document.getElementById('model-select').disabled = false;
     
   } catch (error) {
     console.error('Error saving settings:', error);
@@ -212,7 +192,7 @@ function updateApiKeyStatus(isSaved) {
 // Update model info display
 function updateModelInfo(modelId) {
   const modelInfoElement = document.getElementById('model-info');
-  const option = document.querySelector(`option[value="${modelId}"]`);
+  const option = document.querySelector(`#model-list option[value="${modelId}"]`);
   
   if (option) {
     const ownedBy = option.dataset.ownedBy;
@@ -238,11 +218,11 @@ function showStatus(message, type = 'info') {
   }, 5000);
 }
 
-// Listen for model selection changes
+// Listen for model input changes
 document.addEventListener('DOMContentLoaded', () => {
   const modelSelect = document.getElementById('model-select');
   if (modelSelect) {
-    modelSelect.addEventListener('change', (e) => {
+    modelSelect.addEventListener('input', (e) => {
       updateModelInfo(e.target.value);
     });
   }
