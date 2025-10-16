@@ -95,7 +95,7 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
 
       // Add "Auto Translate" button
       const autoTranslateButton = document.createElement("button");
-      autoTranslateButton.textContent = "Auto Translate All";
+      autoTranslateButton.textContent = "AI Translate All";
       autoTranslateButton.className = "auto-translate-button";
       autoTranslateButton.addEventListener("click", () => translateWithAI(true));
       targetElement.appendChild(autoTranslateButton);
