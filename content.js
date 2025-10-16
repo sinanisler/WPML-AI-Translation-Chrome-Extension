@@ -1,7 +1,25 @@
 (function () {
   let openAIKey = "";
   let selectedModel = "gpt-4o"; // Default fallback
-  let systemPrompt = "Translate the following text into the desired language. If the text is already in the desired language or too short, return it exactly as-is, without any changes or annotations. Maintain any syntax or HTML tags. Never add language names, comments, or suggestions.";
+  let systemPrompt = `You are a translation tool. Follow these rules strictly:
+
+1. ONLY translate text from the source language to the target language
+2. NEVER add explanations, definitions, etymology, or commentary
+3. Return ONLY the translated text - nothing more
+4. Keep these AS-IS without translation:
+   - Brand names (Nike, JETSET, McDonald's, etc.)
+   - Product names and model numbers
+   - URLs, email addresses, and technical identifiers
+   - HTML tags and attributes
+   - Single words that are proper nouns
+   - Text already in the target language
+   - Very short strings (1-2 words) that are ambiguous
+
+5. If the text is already in the target language, return it EXACTLY as provided
+6. If uncertain whether something is a name/brand, keep it unchanged
+7. Preserve all formatting, spacing, and HTML structure exactly
+
+Output format: Return ONLY the translation. No quotes, no language labels, no explanations.`;
   
   // Load settings from storage
   const loadSettings = async () => {
@@ -9,7 +27,25 @@
       const result = await chrome.storage.sync.get(['apiKey', 'selectedModel', 'systemPrompt']);
       openAIKey = result.apiKey || "";
       selectedModel = result.selectedModel || "gpt-4o";
-      systemPrompt = result.systemPrompt || "Translate the following text into the desired language. If the text is already in the desired language or too short, return it exactly as-is, without any changes or annotations. Maintain any syntax or HTML tags. Never add language names, comments, or suggestions.";
+      systemPrompt = result.systemPrompt || `You are a translation tool. Follow these rules strictly:
+
+1. ONLY translate text from the source language to the target language
+2. NEVER add explanations, definitions, etymology, or commentary
+3. Return ONLY the translated text - nothing more
+4. Keep these AS-IS without translation:
+   - Brand names (Nike, JETSET, McDonald's, etc.)
+   - Product names and model numbers
+   - URLs, email addresses, and technical identifiers
+   - HTML tags and attributes
+   - Single words that are proper nouns
+   - Text already in the target language
+   - Very short strings (1-2 words) that are ambiguous
+
+5. If the text is already in the target language, return it EXACTLY as provided
+6. If uncertain whether something is a name/brand, keep it unchanged
+7. Preserve all formatting, spacing, and HTML structure exactly
+
+Output format: Return ONLY the translation. No quotes, no language labels, no explanations.`;
       
       console.log('Settings loaded:', { 
         hasApiKey: !!openAIKey, 
@@ -40,6 +76,7 @@
   });
 
   let stopTranslation = false; // Global variable for stopping the translation
+  let currentAbortController = null; // Controller for aborting fetch requests
 
   const tryToAddButtons = () => {
     const targetElement = document.querySelector(".otgs-editor-container .nav");
@@ -69,7 +106,20 @@
       stopButton.className = "stop-translation-button";
       stopButton.addEventListener("click", () => {
         stopTranslation = true; // Set the global variable to stop
-        console.log("Translation stopped by user");
+        
+        // Immediately abort any ongoing fetch request
+        if (currentAbortController) {
+          currentAbortController.abort();
+          currentAbortController = null;
+        }
+        
+        // Re-enable any disabled buttons
+        const translateBtn = document.querySelector(".translate-wpm-button");
+        const autoTranslateBtn = document.querySelector(".auto-translate-button");
+        if (translateBtn) translateBtn.disabled = false;
+        if (autoTranslateBtn) autoTranslateBtn.disabled = false;
+        
+        console.log("Translation stopped by user - immediate abort");
       });
       targetElement.appendChild(stopButton);
 
@@ -82,11 +132,8 @@
   };
 
   const translateWithAI = async (autoTranslate) => {
-    // Ensure translation is not already stopped
-    if (stopTranslation) {
-      console.log("Translation stopped.");
-      return;
-    }
+    // Reset stop flag at the start of new translation
+    stopTranslation = false;
 
     // Check if API key is configured
     if (!openAIKey) {
@@ -120,7 +167,16 @@
   const sendToOpenAI = async (originalText, targetLanguage, button, autoTranslate) => {
     const prompt = `${originalText} translate to ${targetLanguage}`;
 
+    // Create a new AbortController for this request
+    currentAbortController = new AbortController();
+
     try {
+      // Early check for stop flag
+      if (stopTranslation) {
+        console.log("Translation stopped before API call.");
+        return;
+      }
+
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {
@@ -131,7 +187,14 @@
           model: selectedModel,
           input: prompt,
         }),
+        signal: currentAbortController.signal // Add abort signal
       });
+
+      // Check for stop flag after receiving response
+      if (stopTranslation) {
+        console.log("Translation stopped after receiving response.");
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -140,8 +203,9 @@
 
       const data = await response.json();
 
+      // Check for stop flag again after parsing response
       if (stopTranslation) {
-        console.log("Translation stopped.");
+        console.log("Translation stopped after parsing response.");
         return;
       }
 
@@ -156,6 +220,12 @@
           if (textContent && textContent.text) {
             const translation = textContent.text.trim();
             console.log("Translation completed:", translation.substring(0, 100) + "...");
+
+            // Final check before applying translation
+            if (stopTranslation) {
+              console.log("Translation stopped before applying result.");
+              return;
+            }
 
             const iframe = document.querySelector(".mce-panel iframe");
             if (iframe && iframe.contentDocument) {
@@ -174,7 +244,7 @@
             }
 
             // If autoTranslate is true, proceed with the automation
-            if (autoTranslate) {
+            if (autoTranslate && !stopTranslation) {
               automationProcess();
             }
           } else {
@@ -187,11 +257,18 @@
         throw new Error("Invalid or unexpected response structure from API");
       }
     } catch (error) {
+      // Handle AbortError specifically
+      if (error.name === 'AbortError') {
+        console.log("Translation request was aborted by user");
+        return;
+      }
+      
       console.error("Error with OpenAI API:", error);
       alert(`Translation failed: ${error.message}`);
     } finally {
       button.disabled = false; // Re-enable the button
-      stopTranslation = false; // Reset the stop flag
+      currentAbortController = null; // Clear the controller
+      // Note: Don't reset stopTranslation here to preserve user intent
     }
   };
 
