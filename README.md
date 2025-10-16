@@ -2,7 +2,7 @@
 
 A Chrome extension that adds AI-powered translation capabilities to WPML (WordPress Multilingual Plugin) translation pages using OpenAI or OpenRouter APIs.
 
-<img width="568" height="363" alt="image" src="https://github.com/user-attachments/assets/80c6197d-460c-4cfc-a761-a5281dc7dca4" />
+<img width="610" height="318" alt="image" src="https://github.com/user-attachments/assets/457adcde-cd1a-48d9-8797-cfce38472703" />
 
 
 <img width="1896" height="1028" alt="image" src="https://github.com/user-attachments/assets/48ad29de-38f6-4a37-a7c8-ae159ff9646c" />
