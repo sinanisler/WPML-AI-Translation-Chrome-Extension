@@ -1,7 +1,10 @@
 (function () {
   let openAIKey = "";
-  let selectedModel = "gpt-4o"; // Default fallback
-  let systemPrompt = `You are a translation tool. Follow these rules strictly:
+  let selectedModel = "gpt-5-mini"; // Default fallback
+  let systemPrompt = ""; // Will be loaded from storage
+  
+  // Default system prompt (only used if nothing is saved)
+  const DEFAULT_SYSTEM_PROMPT = `You are a translation tool. Follow these rules strictly:
 
 1. ONLY translate text from the source language to the target language
 2. NEVER add explanations, definitions, etymology, or commentary
@@ -26,26 +29,8 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
     try {
       const result = await chrome.storage.sync.get(['apiKey', 'selectedModel', 'systemPrompt']);
       openAIKey = result.apiKey || "";
-      selectedModel = result.selectedModel || "gpt-4o";
-      systemPrompt = result.systemPrompt || `You are a translation tool. Follow these rules strictly:
-
-1. ONLY translate text from the source language to the target language
-2. NEVER add explanations, definitions, etymology, or commentary
-3. Return ONLY the translated text - nothing more
-4. Keep these AS-IS without translation:
-   - Brand names (Nike, JETSET, McDonald's, etc.)
-   - Product names and model numbers
-   - URLs, email addresses, and technical identifiers
-   - HTML tags and attributes
-   - Single words that are proper nouns
-   - Text already in the target language
-   - Very short strings (1-2 words) that are ambiguous
-
-5. If the text is already in the target language, return it EXACTLY as provided
-6. If uncertain whether something is a name/brand, keep it unchanged
-7. Preserve all formatting, spacing, and HTML structure exactly
-
-Output format: Return ONLY the translation. No quotes, no language labels, no explanations.`;
+  selectedModel = result.selectedModel || "gpt-5-mini";
+      systemPrompt = result.systemPrompt || DEFAULT_SYSTEM_PROMPT;
       
       console.log('Settings loaded:', { 
         hasApiKey: !!openAIKey, 
@@ -67,7 +52,7 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         openAIKey = changes.apiKey.newValue || "";
       }
       if (changes.selectedModel) {
-        selectedModel = changes.selectedModel.newValue || "gpt-4o";
+        selectedModel = changes.selectedModel.newValue || "gpt-5-mini";
       }
       if (changes.systemPrompt) {
         systemPrompt = changes.systemPrompt.newValue || systemPrompt;
@@ -165,8 +150,6 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
   };
 
   const sendToOpenAI = async (originalText, targetLanguage, button, autoTranslate) => {
-    const prompt = `${originalText} translate to ${targetLanguage}`;
-
     // Create a new AbortController for this request
     currentAbortController = new AbortController();
 
@@ -177,6 +160,7 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         return;
       }
 
+      // Use the latest OpenAI Responses API endpoint
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {
@@ -185,7 +169,19 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         },
         body: JSON.stringify({
           model: selectedModel,
-          input: prompt,
+          instructions: systemPrompt,
+          input: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text: `Translate the following text to ${targetLanguage}:\n\n${originalText}`
+                }
+              ]
+            }
+          ],
+          max_output_tokens: 4000
         }),
         signal: currentAbortController.signal // Add abort signal
       });
@@ -208,53 +204,56 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         console.log("Translation stopped after parsing response.");
         return;
       }
+      // Parse the OpenAI Responses payload
+      let translation = "";
 
-      // Parse the new response structure
-      if (data && data.output && Array.isArray(data.output)) {
-        // Find the message output (usually the last one or type "message")
-        const messageOutput = data.output.find(item => item.type === "message") || data.output[data.output.length - 1];
-        
-        if (messageOutput && messageOutput.content && Array.isArray(messageOutput.content)) {
-          const textContent = messageOutput.content.find(item => item.type === "output_text");
-          
-          if (textContent && textContent.text) {
-            const translation = textContent.text.trim();
-            console.log("Translation completed:", translation.substring(0, 100) + "...");
+      if (data && typeof data.output_text === "string" && data.output_text.trim().length > 0) {
+        translation = data.output_text.trim();
+      }
 
-            // Final check before applying translation
-            if (stopTranslation) {
-              console.log("Translation stopped before applying result.");
-              return;
+      if (!translation && Array.isArray(data?.output)) {
+        for (const item of data.output) {
+          if (item?.type === "message" && Array.isArray(item.content)) {
+            const textChunk = item.content.find(chunk => chunk?.type === "output_text" || chunk?.type === "text");
+            if (textChunk?.text) {
+              translation = textChunk.text.trim();
+              break;
             }
+          }
+        }
+      }
 
-            const iframe = document.querySelector(".mce-panel iframe");
-            if (iframe && iframe.contentDocument) {
-              const targetElement = iframe.contentDocument.querySelector("#tinymce");
-              if (targetElement) {
-                targetElement.innerHTML = translation;
-                
-                // Trigger change event to notify WPML
-                const event = new Event('input', { bubbles: true });
-                targetElement.dispatchEvent(event);
-              } else {
-                console.error("Target element for translation replacement not found inside the iframe.");
-              }
-            } else {
-              console.error("Iframe not found.");
-            }
+      if (translation) {
+        console.log("Translation completed:", translation.substring(0, 100) + "...");
 
-            // If autoTranslate is true, proceed with the automation
-            if (autoTranslate && !stopTranslation) {
-              automationProcess();
-            }
+        // Final check before applying translation
+        if (stopTranslation) {
+          console.log("Translation stopped before applying result.");
+          return;
+        }
+
+        const iframe = document.querySelector(".mce-panel iframe");
+        if (iframe && iframe.contentDocument) {
+          const targetElement = iframe.contentDocument.querySelector("#tinymce");
+          if (targetElement) {
+            targetElement.innerHTML = translation;
+            
+            // Trigger change event to notify WPML
+            const event = new Event('input', { bubbles: true });
+            targetElement.dispatchEvent(event);
           } else {
-            throw new Error("No text content found in response");
+            console.error("Target element for translation replacement not found inside the iframe.");
           }
         } else {
-          throw new Error("No message content found in response");
+          console.error("Iframe not found.");
+        }
+
+        // If autoTranslate is true, proceed with the automation
+        if (autoTranslate && !stopTranslation) {
+          automationProcess();
         }
       } else {
-        throw new Error("Invalid or unexpected response structure from API");
+        throw new Error("No translation received from API");
       }
     } catch (error) {
       // Handle AbortError specifically
