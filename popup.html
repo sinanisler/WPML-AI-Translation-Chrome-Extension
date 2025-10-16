@@ -110,8 +110,8 @@
     }
 
     .status {
-      margin-top: 12px;
-      padding: 10px 14px;
+      margin-top: 4px;
+      padding: 2px;
       border-radius: 6px;
       font-size: 13px;
       font-weight: 500;
@@ -213,8 +213,22 @@
     <h3>WPML AI Translation</h3>
 
     <div class="section">
+      <label>Provider</label>
+      <div style="display: flex; gap: 20px; margin-bottom: 16px;">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="radio" name="provider" value="openai" id="provider-openai" checked>
+          <span>OpenAI</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="radio" name="provider" value="openrouter" id="provider-openrouter">
+          <span>OpenRouter</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="section">
       <label for="api-key">
-        OpenAI API Key
+        <span id="api-key-label">OpenAI API Key</span>
         <span id="api-key-status" class="api-key-status"></span>
       </label>
       <input type="password" id="api-key" placeholder="sk-...">

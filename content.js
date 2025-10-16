@@ -1,7 +1,8 @@
 (function () {
   let openAIKey = "";
-  let selectedModel = "gpt-5-mini"; // Default fallback
+  let selectedModel = "gpt-5-mini"; // Default fallback for OpenAI
   let systemPrompt = ""; // Will be loaded from storage
+  let provider = "openai"; // Default provider
   
   // Default system prompt (only used if nothing is saved)
   const DEFAULT_SYSTEM_PROMPT = `You are a translation tool. Follow these rules strictly:
@@ -27,13 +28,31 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
   // Load settings from storage
   const loadSettings = async () => {
     try {
-      const result = await chrome.storage.sync.get(['apiKey', 'selectedModel', 'systemPrompt']);
-      openAIKey = result.apiKey || "";
-  selectedModel = result.selectedModel || "gpt-5-mini";
+      const result = await chrome.storage.sync.get([
+        'openaiApiKey', 
+        'openaiSelectedModel', 
+        'openrouterApiKey', 
+        'openrouterSelectedModel', 
+        'systemPrompt', 
+        'provider'
+      ]);
+      
+      provider = result.provider || "openai";
+      
+      // Load API key and model based on provider
+      if (provider === 'openai') {
+        openAIKey = result.openaiApiKey || "";
+        selectedModel = result.openaiSelectedModel || "gpt-5-mini";
+      } else {
+        openAIKey = result.openrouterApiKey || "";
+        selectedModel = result.openrouterSelectedModel || "openai/gpt-5-mini";
+      }
+      
       systemPrompt = result.systemPrompt || DEFAULT_SYSTEM_PROMPT;
       
       console.log('Settings loaded:', { 
         hasApiKey: !!openAIKey, 
+        provider: provider,
         model: selectedModel,
         promptLength: systemPrompt.length 
       });
@@ -48,12 +67,29 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
   // Listen for storage changes to update settings in real-time
   chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === 'sync') {
-      if (changes.apiKey) {
-        openAIKey = changes.apiKey.newValue || "";
+      // If provider changed, reload all settings
+      if (changes.provider) {
+        loadSettings();
+        return;
       }
-      if (changes.selectedModel) {
-        selectedModel = changes.selectedModel.newValue || "gpt-5-mini";
+      
+      // Update OpenAI settings
+      if (changes.openaiApiKey && provider === 'openai') {
+        openAIKey = changes.openaiApiKey.newValue || "";
       }
+      if (changes.openaiSelectedModel && provider === 'openai') {
+        selectedModel = changes.openaiSelectedModel.newValue || "gpt-5-mini";
+      }
+      
+      // Update OpenRouter settings
+      if (changes.openrouterApiKey && provider === 'openrouter') {
+        openAIKey = changes.openrouterApiKey.newValue || "";
+      }
+      if (changes.openrouterSelectedModel && provider === 'openrouter') {
+        selectedModel = changes.openrouterSelectedModel.newValue || "openai/gpt-5-mini";
+      }
+      
+      // Update system prompt
       if (changes.systemPrompt) {
         systemPrompt = changes.systemPrompt.newValue || systemPrompt;
       }
@@ -180,14 +216,12 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         return;
       }
 
-      // Use the latest OpenAI Responses API endpoint
-      const response = await fetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${openAIKey}`,
-        },
-        body: JSON.stringify({
+      // Determine API endpoint and request body based on provider
+      let apiUrl, requestBody;
+      
+      if (provider === 'openai') {
+        apiUrl = "https://api.openai.com/v1/responses";
+        requestBody = {
           model: selectedModel,
           instructions: systemPrompt,
           input: [
@@ -202,7 +236,23 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
             }
           ],
           max_output_tokens: 4000
-        }),
+        };
+      } else {
+        apiUrl = "https://openrouter.ai/api/v1/responses";
+        requestBody = {
+          model: selectedModel,
+          input: `${systemPrompt}\n\nTranslate the following text to ${targetLanguage}:\n\n${originalText}`,
+          max_output_tokens: 4000
+        };
+      }
+
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${openAIKey}`,
+        },
+        body: JSON.stringify(requestBody),
         signal: currentAbortController.signal // Add abort signal
       });
 
