@@ -1,11 +1,12 @@
-chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
-    if (message.action == "saveAPIKey") {
-        chrome.storage.local.set({ "OpenAIApiKey": message.key }, function() {
-            if (chrome.runtime.lastError) {
-                console.error("Error saving API Key:", chrome.runtime.lastError);
-            } else {
-                console.log("API Key saved");
-            }
-        });
-    }
+// Background script for WPML AI Translation Extension
+// Currently minimal - could be expanded for additional functionality
+
+chrome.runtime.onInstalled.addListener(() => {
+  console.log('WPML AI Translation Extension installed');
+});
+
+// Optional: Handle extension icon click
+chrome.action.onClicked.addListener((tab) => {
+  // This will open the popup automatically due to default_popup in manifest
+  console.log('Extension icon clicked');
 });

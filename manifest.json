@@ -13,8 +13,7 @@
         "*://*.ate.wpml.org/dashboard*"
       ],
       "js": [
-        "content.js",
-        "popup.js"
+        "content.js"
       ],
       "css": [
         "style.css"

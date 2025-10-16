@@ -1,82 +1,143 @@
+/* WPML AI Translation Extension Styles */
+
 .otgs-editor-container .translate-wpm-button{
-background: #27ad95;
-color:white;
-border: none;
-padding: 5px;
-font-size: 14px;
-float:left;
-}
-.otgs-editor-container .translate-wpm-button:disabled{
-border: 1px solid #999999;
-background: gray !important;
-position: relative;
+  background: #27ad95;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 8px;
+  transition: background-color 0.2s ease;
+  float: left;
 }
 
+.otgs-editor-container .translate-wpm-button:hover {
+  background: #229982;
+}
+
+.otgs-editor-container .translate-wpm-button:disabled{
+  border: 1px solid #999999;
+  background: #6c757d !important;
+  cursor: not-allowed;
+  position: relative;
+}
 
 .otgs-editor-container .auto-translate-button{
-background: #27ad95;
-color:white;
-border: none;
-padding: 5px;
-font-size: 14px;
-float:left;
-margin-left:4px;
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 8px;
+  transition: background-color 0.2s ease;
+  float: left;
 }
+
+.otgs-editor-container .auto-translate-button:hover {
+  background: #0056b3;
+}
+
 .otgs-editor-container .auto-translate-button:disabled{
-border: 1px solid #999999;
-background: gray !important;
-position: relative;
+  border: 1px solid #999999;
+  background: #6c757d !important;
+  cursor: not-allowed;
+  position: relative;
 }
 
+.otgs-editor-container .stop-translation-button{
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 8px;
+  transition: background-color 0.2s ease;
+  float: left;
+}
 
+.otgs-editor-container .stop-translation-button:hover {
+  background: #c82333;
+}
 
+/* Loading animation for disabled buttons */
 .otgs-editor-container .translate-wpm-button:disabled::after {
-content: ".";
-animation: loadingDots 2s linear infinite;
-position: absolute;
-left: -2px;  
-bottom:-2px;
-z-index: 111;
-background:#27ad95;
-color:white;
-padding:4px;
-width:220px;
-height:36px;
-font-size:16px;
-font-weight:bold;
+  content: "Translating";
+  animation: loadingDots 2s linear infinite;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 111;
+  background: #6c757d;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .otgs-editor-container .auto-translate-button:disabled::after {
-content: ".";
-animation: loadingDots 2s linear infinite;
-position: absolute;
-right: -2px;  
-bottom:-2px;
-z-index: 111;
-background:#27ad95;
-color:white;
-padding:4px;
-width:220px;
-height:36px;
-font-size:16px;
-font-weight:bold;
+  content: "Auto Translating";
+  animation: loadingDots 2s linear infinite;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 111;
+  background: #6c757d;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 500;
 }
-
 
 @keyframes loadingDots {
-0% { content: "."; }
-33% { content: ".."; }
-66% { content: "..."; }
-100% { content: "...."; }
+  0% { content: "Translating."; }
+  25% { content: "Translating.."; }
+  50% { content: "Translating..."; }
+  75% { content: "Translating...."; }
+  100% { content: "Translating."; }
 }
 
+/* Auto translate specific animation */
+.otgs-editor-container .auto-translate-button:disabled::after {
+  animation-name: autoTranslateAnimation;
+}
 
-.otgs-editor-container .stop-translation-button{
-background: tomato;
-color:white;
-border: none;
-padding: 5px;
-font-size: 14px;
-float:left;
-margin-left:4px;
+@keyframes autoTranslateAnimation {
+  0% { content: "Auto Translating."; }
+  25% { content: "Auto Translating.."; }
+  50% { content: "Auto Translating..."; }
+  75% { content: "Auto Translating...."; }
+  100% { content: "Auto Translating."; }
+}
+
+/* Button group styling */
+.otgs-editor-container .nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .otgs-editor-container .translate-wpm-button,
+  .otgs-editor-container .auto-translate-button,
+  .otgs-editor-container .stop-translation-button {
+    padding: 6px 10px;
+    font-size: 12px;
+    margin-right: 4px;
+  }
 }

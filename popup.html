@@ -6,36 +6,199 @@
   <title>OpenAI WPML</title>
   <style>
     body {
-      min-width: 300px;
-      margin: 20px;
-      font-size: 16px;
+      min-width: 350px;
+      max-width: 500px;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.4;
+      background: #f8f9fa;
     }
 
-    a {
-      color: black;
+    .container {
+      background: white;
+      padding: 10px;
     }
 
-    .save-button {
+    h3 {
+      margin: 0 0 20px 0;
+      color: #333;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .section {
       margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #eee;
     }
 
-    .input {
-      width: 70%;
+    .section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
     }
 
-    .save-button {
-      width: 20%;
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+      color: #555;
+    }
+
+    input[type="text"], input[type="password"], select, textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus, input[type="password"]:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #27ad95;
+      box-shadow: 0 0 0 2px rgba(39, 173, 149, 0.1);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+      font-family: inherit;
+    }
+
+    .button {
+      background: #27ad95;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background-color 0.2s;
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .button:hover {
+      background: #229982;
+    }
+
+    .button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .button.secondary {
+      background: #6c757d;
+      margin-top: 5px;
+    }
+
+    .button.secondary:hover {
+      background: #5a6268;
+    }
+
+    .status {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      display: none;
+    }
+
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .status.info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+
+    .api-key-status {
+      display: inline-block;
+      margin-left: 8px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .api-key-status.saved {
+      color: #28a745;
+    }
+
+    .api-key-status.not-saved {
+      color: #dc3545;
+    }
+
+    .model-info {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #27ad95;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-left: 8px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .hidden {
+      display: none !important;
     }
   </style>
 </head>
 
 <body>
-  <h3>OpenAI Translation in WPML</h3>
+  <div class="container">
+    <h3>OpenAI WPML Translation</h3>
 
-  <input type="text" id="api-key">
-  <button id="save-button">Save</button>
-  <br>
-  <span id="result-text"></span>
+    <div class="section">
+      <label for="api-key">
+        OpenAI API Key
+        <span id="api-key-status" class="api-key-status"></span>
+      </label>
+      <input type="password" id="api-key" placeholder="sk-...">
+      <button id="save-api-key" class="button">Save API Key</button>
+    </div>
+
+    <div class="section">
+      <label for="model-select">AI Model</label>
+      <select id="model-select" disabled>
+        <option value="">Loading models...</option>
+      </select>
+      <button id="refresh-models" class="button secondary" disabled>Refresh Models</button>
+      <div id="model-info" class="model-info"></div>
+    </div>
+
+    <div class="section">
+      <label for="system-prompt">System Prompt</label>
+      <textarea id="system-prompt" placeholder="Enter your custom system prompt..."></textarea>
+      <button id="save-settings" class="button">Save Settings</button>
+    </div>
+
+    <div id="status" class="status"></div>
+  </div>
 
   <script src="/popup.js"></script>
 </body>
