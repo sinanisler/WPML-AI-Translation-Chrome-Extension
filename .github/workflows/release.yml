@@ -1,0 +1,71 @@
+name: Extension Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: '0'
+
+      - name: Get current version
+        id: get_version
+        run: |
+          version=$(grep -oP '"version":\s*"\K[0-9.]+' manifest.json)
+          echo "Current version: $version"
+          echo "version=$version" >> $GITHUB_ENV
+
+      - name: Bump version if release
+        if: contains(github.event.head_commit.message, 'release')
+        run: |
+          current_version=$(grep -oP '"version":\s*"\K[0-9.]+' manifest.json)
+          next_version=$(awk -F. '{print $1 "." ($2+1)}' <<< "$current_version")
+          sed -i "s/\"version\": \"$current_version\"/\"version\": \"$next_version\"/" manifest.json
+          echo "new_version=$next_version" >> $GITHUB_ENV
+
+      - name: Commit version bump
+        if: contains(github.event.head_commit.message, 'release')
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add manifest.json
+          git commit -m "Bump version to ${{ env.new_version }}"
+          git push
+
+      - name: Create zip file
+        run: |
+          mkdir -p wpml-ai-translation-extension
+          rsync -av --exclude='.git' --exclude='.github' --exclude='wpml-ai-translation-extension' ./ wpml-ai-translation-extension/
+          zip -r wpml-ai-translation-extension.zip wpml-ai-translation-extension
+          rm -rf wpml-ai-translation-extension
+
+      - name: Create GitHub Release
+        if: contains(github.event.head_commit.message, 'release')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: wpml-ai-translation-extension.zip
+          tag_name: "v${{ env.new_version }}"
+          name: "Release v${{ env.new_version }}"
+          body: "Release v${{ env.new_version }} of the Chrome Extension."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Pre-release
+        if: contains(github.event.head_commit.message, 'alphatag')
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          files: wpml-ai-translation-extension.zip
+          tag_name: "pre-v${{ env.version }}"
+          name: "Pre-release v${{ env.version }}"
+          body: "Pre-release v${{ env.version }} of the Chrome Extension."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
