@@ -5,7 +5,7 @@ const DEFAULT_SYSTEM_PROMPT = `You are a translation tool. Follow these rules st
 2. NEVER add explanations, definitions, etymology, or commentary
 3. Return ONLY the translated text - nothing more
 4. Keep these AS-IS without translation:
-   - Brand names (Nike, JETSET, McDonald's, etc.)
+   - Brand names (Nike, Alex, McDonald's, etc.)
    - Product names and model numbers
    - URLs, email addresses, and technical identifiers
    - HTML tags and attributes
