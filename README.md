@@ -1,5 +1,10 @@
 # WPML AI Translation Chrome Extension
 
+**Did you saved time and money? 
+**[![Sponsor me](https://img.shields.io/badge/Consider_Supporting_My_Projects_❤-GitHub-d46)](https://github.com/sponsors/sinanisler)
+
+
+
 A Chrome extension that adds AI-powered translation capabilities to WPML (WordPress Multilingual Plugin) translation pages using OpenAI or OpenRouter APIs.
 
 <img width="610" height="318" alt="image" src="https://github.com/user-attachments/assets/457adcde-cd1a-48d9-8797-cfce38472703" />
