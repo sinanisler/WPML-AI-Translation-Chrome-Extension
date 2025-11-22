@@ -1,7 +1,8 @@
 # WPML AI Translation Chrome Extension
 
-**Did you saved time and money? 
-**[![Sponsor me](https://img.shields.io/badge/Consider_Supporting_My_Projects_❤-GitHub-d46)](https://github.com/sponsors/sinanisler)
+
+**Did you saved time and money?**
+[![Sponsor me](https://img.shields.io/badge/Consider_Supporting_My_Projects_❤-GitHub-d46)](https://github.com/sponsors/sinanisler)
 
 
 
