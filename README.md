@@ -108,17 +108,13 @@ You can customize this prompt in the settings to match your specific translation
 
 ## Supported Models
 
-### OpenAI Models
-The extension automatically loads all available models from your OpenAI account:
-- **GPT-4 Series**: Latest models (gpt-4, gpt-4-turbo, etc.) - recommended for highest quality
-- **GPT-3.5 Series**: Faster and more cost-effective options
-- **Other Models**: Any compatible text generation models in your account
 
 ### OpenRouter Models
-Access to a wide variety of models from multiple providers:
-- OpenAI models (GPT-4, GPT-3.5, etc.)
+Access to a wide variety of models from multiple providers:<br>
+OpenRouter supports every model out there.<br>
+- OpenAI models (
 - Anthropic Claude models
-- Google models
+- Google models **(My recommendation is Gemini 3 Flash. Fast, Smart Cheap and Great at MultiLang !)**
 - Meta Llama models
 - And many more providers
 
