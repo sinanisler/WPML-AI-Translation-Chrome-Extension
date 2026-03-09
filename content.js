@@ -203,111 +203,131 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
   };
 
   const sendToOpenAI = async (originalText, targetLanguage, autoTranslate) => {
-    // Create a new AbortController for this request
-    currentAbortController = new AbortController();
-    
+    const MAX_RETRIES = 3;
+    const RETRY_DELAYS = [3000, 6000, 12000]; // Exponential backoff: 3s, 6s, 12s
+
     const translateBtn = document.querySelector(".translate-wpm-button");
     const autoTranslateBtn = document.querySelector(".auto-translate-button");
 
-    try {
-      // Early check for stop flag
-      if (stopTranslation) {
-        console.log("Translation stopped before API call.");
-        return;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      if (stopTranslation) break;
+
+      // Wait before retrying
+      if (attempt > 1) {
+        const delay = RETRY_DELAYS[attempt - 2];
+        console.warn(`Attempt ${attempt - 1} failed: ${lastError?.message}. Retrying in ${delay / 1000}s...`);
+        const label = `Retrying ${attempt - 1}/${MAX_RETRIES - 1}...`;
+        if (autoTranslate && autoTranslateBtn) autoTranslateBtn.textContent = label;
+        if (!autoTranslate && translateBtn) translateBtn.textContent = label;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        if (stopTranslation) break;
       }
 
-      // Determine API endpoint and request body based on provider
-      let apiUrl, requestBody;
-      
-      if (provider === 'openai') {
-        apiUrl = "https://api.openai.com/v1/responses";
-        requestBody = {
-          model: selectedModel,
-          instructions: systemPrompt,
-          input: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "input_text",
-                  text: `Translate the following text to ${targetLanguage}:\n\n${originalText}`
+      currentAbortController = new AbortController();
+
+      try {
+        if (stopTranslation) break;
+
+        // Determine API endpoint and request body based on provider
+        let apiUrl, requestBody;
+
+        if (provider === 'openai') {
+          apiUrl = "https://api.openai.com/v1/responses";
+          requestBody = {
+            model: selectedModel,
+            instructions: systemPrompt,
+            input: [
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "input_text",
+                    text: `Translate the following text to ${targetLanguage}:\n\n${originalText}`
+                  }
+                ]
+              }
+            ],
+            max_output_tokens: 4000
+          };
+        } else {
+          // OpenRouter uses the standard chat completions API
+          apiUrl = "https://openrouter.ai/api/v1/chat/completions";
+          requestBody = {
+            model: selectedModel,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: `Translate the following text to ${targetLanguage}:\n\n${originalText}` }
+            ],
+            max_tokens: 4000
+          };
+        }
+
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${openAIKey}`,
+          },
+          body: JSON.stringify(requestBody),
+          signal: currentAbortController.signal
+        });
+
+        if (stopTranslation) break;
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const err = new Error(`API error ${response.status}: ${errorData.error?.message || 'Unknown error'}`);
+          // Don't retry auth/permission errors
+          if (response.status === 401 || response.status === 403) {
+            lastError = err;
+            break;
+          }
+          throw err;
+        }
+
+        const data = await response.json();
+
+        if (stopTranslation) break;
+
+        let translation = "";
+
+        if (provider === 'openai') {
+          // Parse OpenAI Responses API format
+          if (data && typeof data.output_text === "string" && data.output_text.trim().length > 0) {
+            translation = data.output_text.trim();
+          }
+          if (!translation && Array.isArray(data?.output)) {
+            for (const item of data.output) {
+              if (item?.type === "message" && Array.isArray(item.content)) {
+                const textChunk = item.content.find(chunk => chunk?.type === "output_text" || chunk?.type === "text");
+                if (textChunk?.text) {
+                  translation = textChunk.text.trim();
+                  break;
                 }
-              ]
-            }
-          ],
-          max_output_tokens: 4000
-        };
-      } else {
-        apiUrl = "https://openrouter.ai/api/v1/responses";
-        requestBody = {
-          model: selectedModel,
-          input: `${systemPrompt}\n\nTranslate the following text to ${targetLanguage}:\n\n${originalText}`,
-          max_output_tokens: 4000
-        };
-      }
-
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${openAIKey}`,
-        },
-        body: JSON.stringify(requestBody),
-        signal: currentAbortController.signal // Add abort signal
-      });
-
-      // Check for stop flag after receiving response
-      if (stopTranslation) {
-        console.log("Translation stopped after receiving response.");
-        return;
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`API responded with status code ${response.status}: ${errorData.error?.message || 'Unknown error'}`);
-      }
-
-      const data = await response.json();
-
-      // Check for stop flag again after parsing response
-      if (stopTranslation) {
-        console.log("Translation stopped after parsing response.");
-        return;
-      }
-      // Parse the OpenAI Responses payload
-      let translation = "";
-
-      if (data && typeof data.output_text === "string" && data.output_text.trim().length > 0) {
-        translation = data.output_text.trim();
-      }
-
-      if (!translation && Array.isArray(data?.output)) {
-        for (const item of data.output) {
-          if (item?.type === "message" && Array.isArray(item.content)) {
-            const textChunk = item.content.find(chunk => chunk?.type === "output_text" || chunk?.type === "text");
-            if (textChunk?.text) {
-              translation = textChunk.text.trim();
-              break;
+              }
             }
           }
+        } else {
+          // Parse OpenRouter / chat completions format
+          translation = data?.choices?.[0]?.message?.content?.trim() || "";
         }
-      }
 
-      if (translation) {
+        if (!translation) {
+          throw new Error("No translation received from API");
+        }
+
+        // Success — apply the translation
         console.log("Translation completed:", translation.substring(0, 100) + "...");
 
-        // Final check before applying translation
-        if (stopTranslation) {
-          console.log("Translation stopped before applying result.");
-          return;
-        }
+        if (stopTranslation) break;
 
         const iframe = document.querySelector(".mce-panel iframe");
         if (iframe && iframe.contentDocument) {
           const targetElement = iframe.contentDocument.querySelector("#tinymce");
           if (targetElement) {
             targetElement.innerHTML = translation;
-            
             // Trigger change event to notify WPML
             const event = new Event('input', { bubbles: true });
             targetElement.dispatchEvent(event);
@@ -318,34 +338,47 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
           console.error("Iframe not found.");
         }
 
-        // If autoTranslate is true, proceed with the automation
-        if (autoTranslate && !stopTranslation) {
-          automationProcess();
+        lastError = null; // Clear error — this attempt succeeded
+        break; // Exit retry loop
+
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          console.log("Translation request was aborted by user");
+          lastError = null;
+          break;
         }
+        lastError = error;
+        console.warn(`Attempt ${attempt}/${MAX_RETRIES} failed:`, error.message);
+      } finally {
+        currentAbortController = null;
+      }
+    }
+
+    // Restore button states and text
+    if (translateBtn) {
+      translateBtn.disabled = false;
+      translateBtn.classList.remove('working');
+      translateBtn.textContent = "AI Translate";
+    }
+    if (autoTranslateBtn) {
+      autoTranslateBtn.disabled = false;
+      autoTranslateBtn.classList.remove('working');
+      autoTranslateBtn.textContent = "AI Translate All";
+    }
+
+    if (stopTranslation) return;
+
+    if (lastError) {
+      console.error(`All ${MAX_RETRIES} attempts failed. Last error:`, lastError.message);
+      if (autoTranslate) {
+        // Skip this item and keep going instead of stopping everything
+        console.warn("Skipping current item and continuing auto-translate...");
+        automationProcess();
       } else {
-        throw new Error("No translation received from API");
+        alert(`Translation failed after ${MAX_RETRIES} attempts: ${lastError.message}`);
       }
-    } catch (error) {
-      // Handle AbortError specifically
-      if (error.name === 'AbortError') {
-        console.log("Translation request was aborted by user");
-        return;
-      }
-      
-      console.error("Error with OpenAI API:", error);
-      alert(`Translation failed: ${error.message}`);
-    } finally {
-      // Re-enable both buttons and remove working class
-      if (translateBtn) {
-        translateBtn.disabled = false;
-        translateBtn.classList.remove('working');
-      }
-      if (autoTranslateBtn) {
-        autoTranslateBtn.disabled = false;
-        autoTranslateBtn.classList.remove('working');
-      }
-      currentAbortController = null; // Clear the controller
-      // Note: Don't reset stopTranslation here to preserve user intent
+    } else if (autoTranslate) {
+      automationProcess();
     }
   };
 
@@ -370,7 +403,7 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         } else {
           console.log("No more translations found, auto-translate completed.");
         }
-      }, 1000); // Wait for 1 second
+      }, 500); // Wait for a second
     } else {
       console.log("Save button not found, stopping auto-translate.");
     }
