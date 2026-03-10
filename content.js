@@ -1,7 +1,7 @@
 (function () {
   let apiKey = "";
   let selectedModel = "google/gemini-2.5-flash"; // Default for OpenRouter
-  let systemPrompt = ""; // Will be loaded from storage 
+  let systemPrompt = ""; // Will be loaded from storage  
 
   // Default system prompt (only used if nothing is saved)
   const DEFAULT_SYSTEM_PROMPT = `You are a translation tool. Follow these rules strictly:
