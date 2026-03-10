@@ -181,7 +181,7 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
     try {
       // Early check for stop flag
       if (stopTranslation) {
-        console.log("Translation stopped before API call.");
+        console.log("[AI Translate] Stopped before API call.");
         return;
       }
 
@@ -193,6 +193,20 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         ],
         max_tokens: 4000
       };
+
+      console.log("[AI Translate] Sending request:", {
+        model: selectedModel,
+        targetLanguage,
+        textLength: originalText.length,
+        textPreview: originalText.substring(0, 100),
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        hasApiKey: !!apiKey,
+        apiKeyPrefix: apiKey ? apiKey.substring(0, 8) + "..." : "MISSING"
+      });
+      console.log("[AI Translate] Full request body:", JSON.stringify(requestBody));
+
+      const fetchStart = Date.now();
+      console.log("[AI Translate] Fetch started at", new Date().toISOString());
 
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -206,35 +220,49 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         signal: currentAbortController.signal // Add abort signal
       });
 
+      console.log("[AI Translate] Response received in", Date.now() - fetchStart, "ms");
+      console.log("[AI Translate] Response status:", response.status, response.statusText);
+      console.log("[AI Translate] Response headers:", {
+        contentType: response.headers.get("content-type"),
+        xRequestId: response.headers.get("x-request-id"),
+        xRatelimitRequests: response.headers.get("x-ratelimit-limit-requests"),
+        xRatelimitRemaining: response.headers.get("x-ratelimit-remaining-requests"),
+      });
+
       // Check for stop flag after receiving response
       if (stopTranslation) {
-        console.log("Translation stopped after receiving response.");
+        console.log("[AI Translate] Stopped after receiving response.");
         return;
       }
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`API responded with status code ${response.status}: ${errorData.error?.message || 'Unknown error'}`);
+        const errorText = await response.text().catch(() => "");
+        console.error("[AI Translate] Error response body:", errorText);
+        let errorMsg = "Unknown error";
+        try { errorMsg = JSON.parse(errorText)?.error?.message || errorText; } catch {}
+        throw new Error(`API responded with status code ${response.status}: ${errorMsg}`);
       }
 
+      console.log("[AI Translate] Parsing response JSON...");
       const data = await response.json();
-      console.log("OpenRouter raw response:", JSON.stringify(data).substring(0, 300));
+      console.log("[AI Translate] OpenRouter raw response:", JSON.stringify(data).substring(0, 500));
 
       // Check for stop flag again after parsing response
       if (stopTranslation) {
-        console.log("Translation stopped after parsing response.");
+        console.log("[AI Translate] Stopped after parsing response.");
         return;
       }
 
       // Parse the chat completions response
       const translation = data?.choices?.[0]?.message?.content?.trim() ?? "";
+      console.log("[AI Translate] Extracted translation:", translation ? translation.substring(0, 150) + (translation.length > 150 ? "..." : "") : "(empty)");
+      console.log("[AI Translate] Finish reason:", data?.choices?.[0]?.finish_reason);
+      console.log("[AI Translate] Usage:", data?.usage);
 
       if (translation) {
-        console.log("Translation completed:", translation.substring(0, 100) + "...");
-
         // Final check before applying translation
         if (stopTranslation) {
-          console.log("Translation stopped before applying result.");
+          console.log("[AI Translate] Stopped before applying result.");
           return;
         }
 
@@ -245,21 +273,23 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
             // Guard: verify the iframe still shows what we were translating
             const currentContent = targetElement.innerHTML;
             if (currentContent !== originalText) {
-              console.warn("Iframe content changed during API call — re-translating current content instead of skipping.");
+              console.warn("[AI Translate] Iframe content changed during API call — re-translating current content instead of skipping.");
               await sendTranslation(currentContent, targetLanguage, autoTranslate);
               return;
             }
 
+            console.log("[AI Translate] Applying translation to iframe...");
             targetElement.innerHTML = translation;
 
             // Trigger change event to notify WPML
             const event = new Event('input', { bubbles: true });
             targetElement.dispatchEvent(event);
+            console.log("[AI Translate] Translation applied and input event dispatched.");
           } else {
-            console.error("Target element for translation replacement not found inside the iframe.");
+            console.error("[AI Translate] Target element (#tinymce) not found inside iframe.");
           }
         } else {
-          console.error("Iframe not found.");
+          console.error("[AI Translate] Iframe (.mce-panel iframe) not found.");
         }
 
         // If autoTranslate is true, proceed with the automation
@@ -267,16 +297,17 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
           automationProcess();
         }
       } else {
+        console.error("[AI Translate] Empty translation received. Full response:", JSON.stringify(data));
         throw new Error("No translation received from API");
       }
     } catch (error) {
       // Handle AbortError specifically
       if (error.name === 'AbortError') {
-        console.log("Translation request was aborted by user");
+        console.log("[AI Translate] Request was aborted by user");
         return;
       }
 
-      console.error("Error with OpenRouter API:", error);
+      console.error("[AI Translate] Error with OpenRouter API:", error.name, error.message, error);
       alert(`Translation failed: ${error.message}`);
     } finally {
       // Re-enable both buttons and remove working class
