@@ -198,7 +198,9 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": "https://wpml.org",
+          "X-Title": "WPML AI Translation"
         },
         body: JSON.stringify(requestBody),
         signal: currentAbortController.signal // Add abort signal
