@@ -21,6 +21,7 @@
 5. If the text is already in the target language, return it EXACTLY as provided
 6. If uncertain whether something is a name/brand, keep it unchanged
 7. Preserve all formatting, spacing, and HTML structure exactly
+8. If the text is already in targeted language just leave exacly as is.
 
 Output format: Return ONLY the translation. No quotes, no language labels, no explanations.`;
 
