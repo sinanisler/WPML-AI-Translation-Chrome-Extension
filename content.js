@@ -245,7 +245,8 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
             // Guard: verify the iframe still shows what we were translating
             const currentContent = targetElement.innerHTML;
             if (currentContent !== originalText) {
-              console.warn("Iframe content changed during API call — skipping paste to prevent wrong translation being applied to wrong sentence.");
+              console.warn("Iframe content changed during API call — re-translating current content instead of skipping.");
+              await sendTranslation(currentContent, targetLanguage, autoTranslate);
               return;
             }
 
