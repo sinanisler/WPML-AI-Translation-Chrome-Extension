@@ -213,30 +213,16 @@
     <h3>WPML AI Translation</h3>
 
     <div class="section">
-      <label>Provider</label>
-      <div style="display: flex; gap: 20px; margin-bottom: 16px;">
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="radio" name="provider" value="openai" id="provider-openai" checked>
-          <span>OpenAI</span>
-        </label>
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="radio" name="provider" value="openrouter" id="provider-openrouter">
-          <span>OpenRouter</span>
-        </label>
-      </div>
-    </div>
-
-    <div class="section">
       <label for="api-key">
-        <span id="api-key-label">OpenAI API Key</span>
+        OpenRouter API Key
         <span id="api-key-status" class="api-key-status"></span>
       </label>
-      <input type="password" id="api-key" placeholder="sk-...">
+      <input type="password" id="api-key" placeholder="sk-or-v1-...">
     </div>
 
     <div class="section">
       <label for="model-select">AI Model</label>
-      <input list="model-list" id="model-select" placeholder="Type to search models (e.g., gpt-5-mini)..." disabled>
+      <input list="model-list" id="model-select" placeholder="Type to search models (e.g., openai/gpt-4o-mini)..." disabled>
       <datalist id="model-list">
         <option value="Loading models..."></option>
       </datalist>

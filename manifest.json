@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "OpenAI Translation in WPML",
+  "name": "AI Translation in WPML",
   "version": "1.2",
-  "description": "Automatically add a OpenAI button to WPML translation page.",
+  "description": "Automatically add an AI translate button to WPML translation page using OpenRouter.",
   "permissions": [
     "activeTab",
     "storage"

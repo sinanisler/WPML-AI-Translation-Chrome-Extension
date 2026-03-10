@@ -29,53 +29,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 function setupEventListeners() {
   document.getElementById('save-settings').addEventListener('click', saveAllSettings);
   document.getElementById('api-key').addEventListener('input', handleApiKeyInput);
-  document.getElementById('provider-openai').addEventListener('change', handleProviderChange);
-  document.getElementById('provider-openrouter').addEventListener('change', handleProviderChange);
-}
-
-// Handle provider change
-async function handleProviderChange() {
-  const provider = document.querySelector('input[name="provider"]:checked').value;
-  const apiKeyLabel = document.getElementById('api-key-label');
-  const apiKeyInput = document.getElementById('api-key');
-  const modelSelect = document.getElementById('model-select');
-  
-  // Load the appropriate API key from storage
-  const result = await chrome.storage.sync.get([`${provider}ApiKey`, `${provider}SelectedModel`]);
-  
-  if (provider === 'openai') {
-    apiKeyLabel.textContent = 'OpenAI API Key';
-    apiKeyInput.placeholder = 'sk-...';
-    apiKeyInput.value = result.openaiApiKey || '';
-    modelSelect.value = result.openaiSelectedModel || '';
-  } else {
-    apiKeyLabel.textContent = 'OpenRouter API Key';
-    apiKeyInput.placeholder = 'sk-or-v1-...';
-    apiKeyInput.value = result.openrouterApiKey || '';
-    modelSelect.value = result.openrouterSelectedModel || '';
-  }
-  
-  // Update API key status
-  updateApiKeyStatus(!!apiKeyInput.value.trim());
-  
-  // Reload models if API key exists
-  const apiKey = apiKeyInput.value.trim();
-  if (apiKey) {
-    modelSelect.disabled = false;
-    await loadModels();
-  } else {
-    modelSelect.disabled = true;
-    modelSelect.value = '';
-    const modelList = document.getElementById('model-list');
-    modelList.innerHTML = '<option value="Enter API key first"></option>';
-  }
 }
 
 // Handle API key input changes
 function handleApiKeyInput() {
   const apiKey = document.getElementById('api-key').value.trim();
   const modelSelect = document.getElementById('model-select');
-  
+
   if (apiKey && apiKey.startsWith('sk-')) {
     modelSelect.disabled = false;
     loadModels();
@@ -90,114 +50,87 @@ function handleApiKeyInput() {
 async function loadSavedSettings() {
   try {
     const result = await chrome.storage.sync.get([
-      'openaiApiKey', 
-      'openaiSelectedModel', 
-      'openrouterApiKey', 
-      'openrouterSelectedModel', 
-      'systemPrompt', 
-      'provider'
+      'openrouterApiKey',
+      'openrouterSelectedModel',
+      'systemPrompt'
     ]);
-    
-    // Load provider (default to OpenAI)
-    const provider = result.provider || 'openai';
-    document.getElementById(`provider-${provider}`).checked = true;
-    
+
     // Load system prompt
     const systemPrompt = result.systemPrompt || DEFAULT_SYSTEM_PROMPT;
     document.getElementById('system-prompt').value = systemPrompt;
-    
-    // This will load the appropriate API key and model for the selected provider
-    await handleProviderChange();
-    
+
+    // Load API key
+    const apiKey = result.openrouterApiKey || '';
+    document.getElementById('api-key').value = apiKey;
+    updateApiKeyStatus(!!apiKey);
+
+    // Load models if API key exists
+    const modelSelect = document.getElementById('model-select');
+    if (apiKey) {
+      modelSelect.disabled = false;
+      await loadModels();
+      // Restore selected model after loading
+      if (result.openrouterSelectedModel) {
+        modelSelect.value = result.openrouterSelectedModel;
+        updateModelInfo(result.openrouterSelectedModel);
+      }
+    } else {
+      modelSelect.disabled = true;
+      const modelList = document.getElementById('model-list');
+      modelList.innerHTML = '<option value="Enter API key first"></option>';
+    }
+
   } catch (error) {
     console.error('Error loading settings:', error);
     showStatus('Error loading settings', 'error');
   }
 }
 
-// Load available models from OpenAI or OpenRouter API
+// Load available models from OpenRouter API
 async function loadModels() {
   const apiKey = document.getElementById('api-key').value.trim();
   const modelSelect = document.getElementById('model-select');
   const modelList = document.getElementById('model-list');
-  const provider = document.querySelector('input[name="provider"]:checked').value;
-  
+
   if (!apiKey) {
     showStatus('Please enter API key first', 'error');
     return;
   }
-  
+
   // Show loading state
   modelList.innerHTML = '<option value="Loading models..."></option>';
   modelSelect.disabled = true;
-  
+
   try {
-    let apiUrl;
-    if (provider === 'openai') {
-      apiUrl = 'https://api.openai.com/v1/models';
-    } else {
-      apiUrl = 'https://openrouter.ai/api/v1/models';
-    }
-    
-    const response = await fetch(apiUrl, {
+    const response = await fetch('https://openrouter.ai/api/v1/models', {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       }
     });
-    
+
     if (!response.ok) {
       throw new Error(`API responded with status ${response.status}`);
     }
-    
+
     const data = await response.json();
-    let models;
-    
-    if (provider === 'openai') {
-      // Filter and sort OpenAI models (prioritize GPT models)
-      models = data.data
-        .filter(model => model.id.includes('gpt') || model.id.includes('text'))
-        .sort((a, b) => {
-          // Prioritize newer GPT models
-          if (a.id.includes('gpt-4') && !b.id.includes('gpt-4')) return -1;
-          if (!a.id.includes('gpt-4') && b.id.includes('gpt-4')) return 1;
-          if (a.id.includes('gpt-3.5') && !b.id.includes('gpt-3.5')) return -1;
-          if (!a.id.includes('gpt-3.5') && b.id.includes('gpt-3.5')) return 1;
-          return a.id.localeCompare(b.id);
-        });
-    } else {
-      // Sort OpenRouter models alphabetically
-      models = data.data.sort((a, b) => a.id.localeCompare(b.id));
-    }
-    
+
+    // Sort OpenRouter models alphabetically
+    const models = data.data.sort((a, b) => a.id.localeCompare(b.id));
+
     // Populate datalist options
     modelList.innerHTML = '';
-    
+
     models.forEach(model => {
       const option = document.createElement('option');
       option.value = model.id;
-      
-      // Add additional info as data attributes
-      if (provider === 'openai') {
-        option.dataset.ownedBy = model.owned_by;
-        option.dataset.created = model.created;
-      } else {
-        option.dataset.name = model.name || model.id;
-        option.dataset.contextLength = model.context_length;
-      }
-      
+      option.dataset.name = model.name || model.id;
+      option.dataset.contextLength = model.context_length;
       modelList.appendChild(option);
     });
-    
-    // Restore previously selected model
-    const savedSettings = await chrome.storage.sync.get(['selectedModel']);
-    if (savedSettings.selectedModel) {
-      modelSelect.value = savedSettings.selectedModel;
-      updateModelInfo(savedSettings.selectedModel);
-    }
-    
+
     showStatus(`Loaded ${models.length} models successfully`, 'success');
-    
+
   } catch (error) {
     console.error('Error loading models:', error);
     modelList.innerHTML = '<option value="Error loading models"></option>';
@@ -207,50 +140,38 @@ async function loadModels() {
   }
 }
 
-// Save all settings (API key, model, system prompt, and provider)
+// Save all settings (API key, model, system prompt)
 async function saveAllSettings() {
   const apiKey = document.getElementById('api-key').value.trim();
   const selectedModel = document.getElementById('model-select').value.trim();
   const systemPrompt = document.getElementById('system-prompt').value.trim();
-  const provider = document.querySelector('input[name="provider"]:checked').value;
-  
+
   // Validate model
   if (!selectedModel) {
     showStatus('Please select a model', 'error');
     return;
   }
-  
+
   // Validate system prompt
   if (!systemPrompt) {
     showStatus('Please enter a system prompt', 'error');
     return;
   }
-  
+
   try {
-    // Save settings with provider-specific keys
-    const settingsToSave = {
-      systemPrompt,
-      provider
-    };
-    
-    // Save API key and model for the current provider
-    if (provider === 'openai') {
-      settingsToSave.openaiApiKey = apiKey;
-      settingsToSave.openaiSelectedModel = selectedModel;
-    } else {
-      settingsToSave.openrouterApiKey = apiKey;
-      settingsToSave.openrouterSelectedModel = selectedModel;
-    }
-    
-    await chrome.storage.sync.set(settingsToSave);
-    
+    await chrome.storage.sync.set({
+      openrouterApiKey: apiKey,
+      openrouterSelectedModel: selectedModel,
+      systemPrompt
+    });
+
     updateApiKeyStatus(true);
     showStatus('All settings saved successfully!', 'success');
     updateModelInfo(selectedModel);
-    
+
     // Enable model select if not already
     document.getElementById('model-select').disabled = false;
-    
+
   } catch (error) {
     console.error('Error saving settings:', error);
     showStatus('Error saving settings', 'error');
@@ -273,19 +194,11 @@ function updateApiKeyStatus(isSaved) {
 function updateModelInfo(modelId) {
   const modelInfoElement = document.getElementById('model-info');
   const option = document.querySelector(`#model-list option[value="${modelId}"]`);
-  const provider = document.querySelector('input[name="provider"]:checked').value;
-  
+
   if (option) {
-    if (provider === 'openai') {
-      const ownedBy = option.dataset.ownedBy;
-      const created = option.dataset.created;
-      const createdDate = created ? new Date(parseInt(created) * 1000).toLocaleDateString() : 'Unknown';
-      modelInfoElement.textContent = `Owner: ${ownedBy || 'Unknown'} | Created: ${createdDate}`;
-    } else {
-      const name = option.dataset.name;
-      const contextLength = option.dataset.contextLength;
-      modelInfoElement.textContent = `${name || modelId} | Context: ${contextLength ? contextLength.toLocaleString() : 'Unknown'}`;
-    }
+    const name = option.dataset.name;
+    const contextLength = option.dataset.contextLength;
+    modelInfoElement.textContent = `${name || modelId} | Context: ${contextLength ? parseInt(contextLength).toLocaleString() : 'Unknown'}`;
   } else {
     modelInfoElement.textContent = '';
   }
@@ -297,7 +210,7 @@ function showStatus(message, type = 'info') {
   statusElement.textContent = message;
   statusElement.className = `status ${type}`;
   statusElement.style.display = 'block';
-  
+
   // Auto-hide after 5 seconds
   setTimeout(() => {
     statusElement.style.display = 'none';

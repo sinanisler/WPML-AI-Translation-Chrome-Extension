@@ -1,9 +1,8 @@
 (function () {
-  let openAIKey = "";
-  let selectedModel = "gpt-5-mini"; // Default fallback for OpenAI
+  let apiKey = "";
+  let selectedModel = "google/gemini-2.5-flash"; // Default for OpenRouter
   let systemPrompt = ""; // Will be loaded from storage
-  let provider = "openai"; // Default provider
-  
+
   // Default system prompt (only used if nothing is saved)
   const DEFAULT_SYSTEM_PROMPT = `You are a translation tool. Follow these rules strictly:
 
@@ -24,37 +23,24 @@
 7. Preserve all formatting, spacing, and HTML structure exactly
 
 Output format: Return ONLY the translation. No quotes, no language labels, no explanations.`;
-  
+
   // Load settings from storage
   const loadSettings = async () => {
     try {
       const result = await chrome.storage.sync.get([
-        'openaiApiKey', 
-        'openaiSelectedModel', 
-        'openrouterApiKey', 
-        'openrouterSelectedModel', 
-        'systemPrompt', 
-        'provider'
+        'openrouterApiKey',
+        'openrouterSelectedModel',
+        'systemPrompt'
       ]);
-      
-      provider = result.provider || "openai";
-      
-      // Load API key and model based on provider
-      if (provider === 'openai') {
-        openAIKey = result.openaiApiKey || "";
-        selectedModel = result.openaiSelectedModel || "gpt-5-mini";
-      } else {
-        openAIKey = result.openrouterApiKey || "";
-        selectedModel = result.openrouterSelectedModel || "openai/gpt-5-mini";
-      }
-      
+
+      apiKey = result.openrouterApiKey || "";
+      selectedModel = result.openrouterSelectedModel || "openai/gpt-4o-mini";
       systemPrompt = result.systemPrompt || DEFAULT_SYSTEM_PROMPT;
-      
-      console.log('Settings loaded:', { 
-        hasApiKey: !!openAIKey, 
-        provider: provider,
+
+      console.log('Settings loaded:', {
+        hasApiKey: !!apiKey,
         model: selectedModel,
-        promptLength: systemPrompt.length 
+        promptLength: systemPrompt.length
       });
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -67,29 +53,12 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
   // Listen for storage changes to update settings in real-time
   chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === 'sync') {
-      // If provider changed, reload all settings
-      if (changes.provider) {
-        loadSettings();
-        return;
+      if (changes.openrouterApiKey) {
+        apiKey = changes.openrouterApiKey.newValue || "";
       }
-      
-      // Update OpenAI settings
-      if (changes.openaiApiKey && provider === 'openai') {
-        openAIKey = changes.openaiApiKey.newValue || "";
+      if (changes.openrouterSelectedModel) {
+        selectedModel = changes.openrouterSelectedModel.newValue || "openai/gpt-4o-mini";
       }
-      if (changes.openaiSelectedModel && provider === 'openai') {
-        selectedModel = changes.openaiSelectedModel.newValue || "gpt-5-mini";
-      }
-      
-      // Update OpenRouter settings
-      if (changes.openrouterApiKey && provider === 'openrouter') {
-        openAIKey = changes.openrouterApiKey.newValue || "";
-      }
-      if (changes.openrouterSelectedModel && provider === 'openrouter') {
-        selectedModel = changes.openrouterSelectedModel.newValue || "openai/gpt-5-mini";
-      }
-      
-      // Update system prompt
       if (changes.systemPrompt) {
         systemPrompt = changes.systemPrompt.newValue || systemPrompt;
       }
@@ -127,13 +96,13 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
       stopButton.className = "stop-translation-button";
       stopButton.addEventListener("click", () => {
         stopTranslation = true; // Set the global variable to stop
-        
+
         // Immediately abort any ongoing fetch request
         if (currentAbortController) {
           currentAbortController.abort();
           currentAbortController = null;
         }
-        
+
         // Re-enable any disabled buttons and remove working class
         const translateBtn = document.querySelector(".translate-wpm-button");
         const autoTranslateBtn = document.querySelector(".auto-translate-button");
@@ -145,7 +114,7 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
           autoTranslateBtn.disabled = false;
           autoTranslateBtn.classList.remove('working');
         }
-        
+
         console.log("Translation stopped by user - immediate abort");
       });
       targetElement.appendChild(stopButton);
@@ -163,8 +132,8 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
     stopTranslation = false;
 
     // Check if API key is configured
-    if (!openAIKey) {
-      alert("Please configure your OpenAI API key in the extension popup first.");
+    if (!apiKey) {
+      alert("Please configure your OpenRouter API key in the extension popup first.");
       return;
     }
 
@@ -184,7 +153,7 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
 
     if (originalText && translationSpans && translationSpans.length > 1) {
       const targetLanguage = translationSpans[1].textContent;
-      
+
       // Disable both buttons during translation
       if (translateBtn) {
         translateBtn.disabled = true;
@@ -194,18 +163,18 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         autoTranslateBtn.disabled = true;
         if (autoTranslate) autoTranslateBtn.classList.add('working');
       }
-      
-      await sendToOpenAI(originalText, targetLanguage, autoTranslate);
+
+      await sendTranslation(originalText, targetLanguage, autoTranslate);
     } else {
       console.log("Required elements not found for translation.");
       alert("Could not find text to translate. Please make sure you're on a WPML translation page.");
     }
   };
 
-  const sendToOpenAI = async (originalText, targetLanguage, autoTranslate) => {
+  const sendTranslation = async (originalText, targetLanguage, autoTranslate) => {
     // Create a new AbortController for this request
     currentAbortController = new AbortController();
-    
+
     const translateBtn = document.querySelector(".translate-wpm-button");
     const autoTranslateBtn = document.querySelector(".auto-translate-button");
 
@@ -216,41 +185,17 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         return;
       }
 
-      // Determine API endpoint and request body based on provider
-      let apiUrl, requestBody;
-      
-      if (provider === 'openai') {
-        apiUrl = "https://api.openai.com/v1/responses";
-        requestBody = {
-          model: selectedModel,
-          instructions: systemPrompt,
-          input: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "input_text",
-                  text: `Translate the following text to ${targetLanguage}:\n\n${originalText}`
-                }
-              ]
-            }
-          ],
-          max_output_tokens: 4000
-        };
-      } else {
-        apiUrl = "https://openrouter.ai/api/v1/responses";
-        requestBody = {
-          model: selectedModel,
-          input: `${systemPrompt}\n\nTranslate the following text to ${targetLanguage}:\n\n${originalText}`,
-          max_output_tokens: 4000
-        };
-      }
+      const requestBody = {
+        model: selectedModel,
+        input: `${systemPrompt}\n\nTranslate the following text to ${targetLanguage}:\n\n${originalText}`,
+        max_output_tokens: 4000
+      };
 
-      const response = await fetch(apiUrl, {
+      const response = await fetch("https://openrouter.ai/api/v1/responses", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${openAIKey}`,
+          Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify(requestBody),
         signal: currentAbortController.signal // Add abort signal
@@ -274,7 +219,8 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         console.log("Translation stopped after parsing response.");
         return;
       }
-      // Parse the OpenAI Responses payload
+
+      // Parse the response payload
       let translation = "";
 
       if (data && typeof data.output_text === "string" && data.output_text.trim().length > 0) {
@@ -307,7 +253,7 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
           const targetElement = iframe.contentDocument.querySelector("#tinymce");
           if (targetElement) {
             targetElement.innerHTML = translation;
-            
+
             // Trigger change event to notify WPML
             const event = new Event('input', { bubbles: true });
             targetElement.dispatchEvent(event);
@@ -331,8 +277,8 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         console.log("Translation request was aborted by user");
         return;
       }
-      
-      console.error("Error with OpenAI API:", error);
+
+      console.error("Error with OpenRouter API:", error);
       alert(`Translation failed: ${error.message}`);
     } finally {
       // Re-enable both buttons and remove working class
@@ -359,10 +305,10 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
     if (saveButton) {
       saveButton.click(); // Click the save button
       console.log("Save button clicked, waiting for next translation...");
-      
+
       setTimeout(() => {
         if (stopTranslation) return;
-        
+
         const addTranslationElement = document.querySelector(".add-translation");
         if (addTranslationElement) {
           console.log("Continuing auto translation...");
