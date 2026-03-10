@@ -403,7 +403,7 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         } else {
           console.log("No more translations found, auto-translate completed.");
         }
-      }, 500); // Wait for a second
+      }, 900); // Wait for a second
     } else {
       console.log("Save button not found, stopping auto-translate.");
     }
