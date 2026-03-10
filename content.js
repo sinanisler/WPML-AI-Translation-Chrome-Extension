@@ -175,7 +175,7 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         resetBtn.click();
         console.log("[AI Translate] Reset button clicked to restore original content.");
         // Wait for the content to be restored before reading the iframe
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 500));
       } else {
         console.warn("[AI Translate] Reset button (.reset-btn) not found, proceeding without reset.");
       }
@@ -361,7 +361,9 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
             const saveButton = document.querySelector(".save-sentence-btn");
             if (saveButton) {
               saveButton.click();
-              console.log("[AI Translate] Save button clicked.");
+              console.log("[AI Translate] .save-sentence-btn CLICKED.");
+            } else {
+              console.error("[AI Translate] .save-sentence-btn NOT FOUND — could not save.");
             }
           }
         }
@@ -416,28 +418,38 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
 
   const automationProcess = async () => {
     if (stopTranslation) {
-      console.log("Automation stopped.");
+      console.log("[AI Translate] automationProcess: stopTranslation=true, stopping.");
       return;
     }
 
+    console.log("[AI Translate] automationProcess: waiting for .save-sentence-btn...");
     const saveButton = await waitForElement(".save-sentence-btn");
     if (saveButton) {
       saveButton.click();
-      console.log("Save button clicked, waiting for next translation...");
+      console.log("[AI Translate] automationProcess: .save-sentence-btn CLICKED.");
 
       setTimeout(() => {
-        if (stopTranslation) return;
+        if (stopTranslation) {
+          console.log("[AI Translate] automationProcess: stopTranslation=true after save, stopping.");
+          return;
+        }
 
         const addTranslationElement = document.querySelector(".add-translation");
         if (addTranslationElement) {
-          console.log("Continuing auto translation...");
-          document.querySelector(".auto-translate-button").click();
+          console.log("[AI Translate] automationProcess: .add-translation FOUND, clicking .auto-translate-button...");
+          const autoBtn = document.querySelector(".auto-translate-button");
+          if (autoBtn) {
+            autoBtn.click();
+            console.log("[AI Translate] automationProcess: .auto-translate-button CLICKED, next cycle starting.");
+          } else {
+            console.error("[AI Translate] automationProcess: .auto-translate-button NOT FOUND — loop broken!");
+          }
         } else {
-          console.log("No more translations found, auto-translate completed.");
+          console.log("[AI Translate] automationProcess: .add-translation NOT FOUND — no more items, auto-translate complete.");
         }
       }, 1000);
     } else {
-      console.log("Save button not found after waiting, stopping auto-translate.");
+      console.error("[AI Translate] automationProcess: .save-sentence-btn NOT FOUND after waiting — loop stopped!");
     }
   };
 
