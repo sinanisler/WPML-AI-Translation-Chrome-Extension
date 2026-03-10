@@ -168,6 +168,19 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
       return;
     }
 
+    // Before translating, click the reset button to restore original source content
+    if (autoTranslate) {
+      const resetBtn = document.querySelector(".reset-btn");
+      if (resetBtn) {
+        resetBtn.click();
+        console.log("[AI Translate] Reset button clicked to restore original content.");
+        // Wait for the content to be restored before reading the iframe
+        await new Promise(resolve => setTimeout(resolve, 300));
+      } else {
+        console.warn("[AI Translate] Reset button (.reset-btn) not found, proceeding without reset.");
+      }
+    }
+
     // Capture the original text and target language
     const iframe = findEditorIframe();
     let originalText = "";
