@@ -339,9 +339,17 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
           console.error("[AI Translate] Iframe (.mce-panel iframe) not found.");
         }
 
-        // If autoTranslate is true, proceed with the automation
-        if (autoTranslate && !stopTranslation) {
-          automationProcess();
+        // Click save button after translation
+        if (!stopTranslation) {
+          if (autoTranslate) {
+            automationProcess();
+          } else {
+            const saveButton = document.querySelector(".save-sentence-btn");
+            if (saveButton) {
+              saveButton.click();
+              console.log("[AI Translate] Save button clicked.");
+            }
+          }
         }
       } else {
         console.error("[AI Translate] Empty translation received. Full response:", JSON.stringify(data));
