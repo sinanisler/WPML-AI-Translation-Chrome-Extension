@@ -285,15 +285,36 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
     }
   };
 
-  const automationProcess = () => {
+  const waitForElement = (selector, timeout = 5000) => {
+    return new Promise((resolve) => {
+      const existing = document.querySelector(selector);
+      if (existing) return resolve(existing);
+
+      const observer = new MutationObserver(() => {
+        const el = document.querySelector(selector);
+        if (el) {
+          observer.disconnect();
+          resolve(el);
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+
+      setTimeout(() => {
+        observer.disconnect();
+        resolve(null);
+      }, timeout);
+    });
+  };
+
+  const automationProcess = async () => {
     if (stopTranslation) {
       console.log("Automation stopped.");
       return;
     }
 
-    const saveButton = document.querySelector(".save-sentence-btn");
+    const saveButton = await waitForElement(".save-sentence-btn");
     if (saveButton) {
-      saveButton.click(); // Click the save button
+      saveButton.click();
       console.log("Save button clicked, waiting for next translation...");
 
       setTimeout(() => {
@@ -302,13 +323,13 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         const addTranslationElement = document.querySelector(".add-translation");
         if (addTranslationElement) {
           console.log("Continuing auto translation...");
-          document.querySelector(".auto-translate-button").click(); // Click Auto Translate again
+          document.querySelector(".auto-translate-button").click();
         } else {
           console.log("No more translations found, auto-translate completed.");
         }
-      }, 1000); // Wait for 1 second
+      }, 1000);
     } else {
-      console.log("Save button not found, stopping auto-translate.");
+      console.log("Save button not found after waiting, stopping auto-translate.");
     }
   };
 
