@@ -68,6 +68,36 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
   let stopTranslation = false; // Global variable for stopping the translation
   let currentAbortController = null; // Controller for aborting fetch requests
 
+  // Smart iframe finder: tries known selectors, then scans all iframes for #tinymce
+  const findEditorIframe = () => {
+    const selectors = [
+      ".mce-panel iframe",
+      ".mce-edit-area iframe",
+      "iframe[id*='otgs-editor']",
+      "iframe[id*='_ifr']",
+    ];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el && el.contentDocument && el.contentDocument.querySelector("#tinymce")) {
+        console.log(`[AI Translate] iframe found via selector: "${sel}" (id=${el.id})`);
+        return el;
+      }
+    }
+    // Last resort: scan every iframe on the page
+    const allIframes = document.querySelectorAll("iframe");
+    console.log(`[AI Translate] Scanning all ${allIframes.length} iframes on page...`);
+    for (const iframe of allIframes) {
+      try {
+        if (iframe.contentDocument && iframe.contentDocument.querySelector("#tinymce")) {
+          console.log(`[AI Translate] iframe found via full scan (id=${iframe.id}, src=${iframe.src})`);
+          return iframe;
+        }
+      } catch (e) { /* cross-origin, skip */ }
+    }
+    console.error("[AI Translate] No iframe with #tinymce found on page. All iframes:", [...allIframes].map(f => ({ id: f.id, src: f.src })));
+    return null;
+  };
+
   const tryToAddButtons = () => {
     const targetElement = document.querySelector(".otgs-editor-container .nav");
     if (targetElement) {
@@ -138,7 +168,7 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
     }
 
     // Capture the original text and target language
-    const iframe = document.querySelector(".mce-panel iframe");
+    const iframe = findEditorIframe();
     let originalText = "";
     if (iframe && iframe.contentDocument) {
       const targetElement = iframe.contentDocument.querySelector("#tinymce");
@@ -208,17 +238,34 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
       const fetchStart = Date.now();
       console.log("[AI Translate] Fetch started at", new Date().toISOString());
 
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://wpml.org",
-          "X-Title": "WPML AI Translation"
-        },
-        body: JSON.stringify(requestBody),
-        signal: currentAbortController.signal // Add abort signal
-      });
+      // Heartbeat: log every 5s so you can see it's still waiting
+      const heartbeatInterval = setInterval(() => {
+        console.log(`[AI Translate] Still waiting for response... ${Math.round((Date.now() - fetchStart) / 1000)}s elapsed`);
+      }, 5000);
+
+      // Timeout after 60 seconds
+      const timeoutId = setTimeout(() => {
+        console.error("[AI Translate] Request TIMED OUT after 60 seconds! Aborting.");
+        currentAbortController.abort();
+      }, 60000);
+
+      let response;
+      try {
+        response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+            "HTTP-Referer": "https://wpml.org",
+            "X-Title": "WPML AI Translation"
+          },
+          body: JSON.stringify(requestBody),
+          signal: currentAbortController.signal
+        });
+      } finally {
+        clearInterval(heartbeatInterval);
+        clearTimeout(timeoutId);
+      }
 
       console.log("[AI Translate] Response received in", Date.now() - fetchStart, "ms");
       console.log("[AI Translate] Response status:", response.status, response.statusText);
@@ -266,7 +313,7 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
           return;
         }
 
-        const iframe = document.querySelector(".mce-panel iframe");
+        const iframe = findEditorIframe();
         if (iframe && iframe.contentDocument) {
           const targetElement = iframe.contentDocument.querySelector("#tinymce");
           if (targetElement) {
