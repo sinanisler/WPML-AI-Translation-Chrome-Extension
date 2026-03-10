@@ -187,11 +187,14 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
 
       const requestBody = {
         model: selectedModel,
-        input: `${systemPrompt}\n\nTranslate the following text to ${targetLanguage}:\n\n${originalText}`,
-        max_output_tokens: 4000
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Translate the following text to ${targetLanguage}:\n\n${originalText}` }
+        ],
+        max_tokens: 4000
       };
 
-      const response = await fetch("https://openrouter.ai/api/v1/responses", {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -213,6 +216,7 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
       }
 
       const data = await response.json();
+      console.log("OpenRouter raw response:", JSON.stringify(data).substring(0, 300));
 
       // Check for stop flag again after parsing response
       if (stopTranslation) {
@@ -220,24 +224,8 @@ Output format: Return ONLY the translation. No quotes, no language labels, no ex
         return;
       }
 
-      // Parse the response payload
-      let translation = "";
-
-      if (data && typeof data.output_text === "string" && data.output_text.trim().length > 0) {
-        translation = data.output_text.trim();
-      }
-
-      if (!translation && Array.isArray(data?.output)) {
-        for (const item of data.output) {
-          if (item?.type === "message" && Array.isArray(item.content)) {
-            const textChunk = item.content.find(chunk => chunk?.type === "output_text" || chunk?.type === "text");
-            if (textChunk?.text) {
-              translation = textChunk.text.trim();
-              break;
-            }
-          }
-        }
-      }
+      // Parse the chat completions response
+      const translation = data?.choices?.[0]?.message?.content?.trim() ?? "";
 
       if (translation) {
         console.log("Translation completed:", translation.substring(0, 100) + "...");
