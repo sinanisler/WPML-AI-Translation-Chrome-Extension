@@ -71,6 +71,31 @@
       font-size: 13px;
     }
 
+    .label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .icon-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: transparent;
+      color: #27ad95;
+      cursor: pointer;
+    }
+
+    .icon-button:hover {
+      background: rgba(39, 173, 149, 0.1);
+      border-color: #27ad95;
+    }
+
     .button {
       background: #27ad95;
       color: white;
@@ -230,7 +255,12 @@
     </div>
 
     <div class="section">
-      <label for="system-prompt">System Prompt</label>
+      <div class="label-row">
+        <label for="system-prompt">System Prompt</label>
+        <button id="reset-prompt" class="icon-button" type="button" title="Reset to default prompt" aria-label="Reset system prompt to default">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
+        </button>
+      </div>
       <textarea id="system-prompt" placeholder="Enter your custom system prompt..."></textarea>
       <div class="help-text">This prompt guides how the AI translates your content.</div>
       <button id="save-settings" class="button">Save All Settings</button>

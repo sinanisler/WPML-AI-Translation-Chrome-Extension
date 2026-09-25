@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Setup event listeners
 function setupEventListeners() {
   document.getElementById('save-settings').addEventListener('click', saveAllSettings);
+  document.getElementById('reset-prompt').addEventListener('click', resetSystemPrompt);
   document.getElementById('api-key').addEventListener('input', handleApiKeyInput);
 }
 
@@ -44,6 +45,19 @@ function handleApiKeyInput() {
     modelSelect.disabled = true;
     const modelList = document.getElementById('model-list');
     modelList.innerHTML = '<option value="Enter valid API key first"></option>';
+  }
+}
+
+// Restore the default system prompt and save it right away
+async function resetSystemPrompt() {
+  if (!confirm('Reset the system prompt to the default? Your custom prompt will be replaced.')) return;
+  document.getElementById('system-prompt').value = DEFAULT_SYSTEM_PROMPT;
+  try {
+    await chrome.storage.sync.set({ systemPrompt: DEFAULT_SYSTEM_PROMPT });
+    showStatus('System prompt reset to default', 'success');
+  } catch (error) {
+    console.error('Error resetting prompt:', error);
+    showStatus('Error resetting prompt', 'error');
   }
 }
 

@@ -596,6 +596,203 @@ Output: ONLY the translated text.`;
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Direct ATE API (no UI). ATE signs every request with HMAC-SHA1 over
+  // `method + url + "?" + query` using the job's private key (kept by ATE in
+  // localStorage). POST/PUT bodies are included as `body=md5(json)` in the
+  // signed params. Endpoints used:
+  //   GET  api/jobs/{job}?v=3                     -> job info + all segments
+  //   POST api/jobs/{job}/segments/{seg}/save     -> save one translation
+  // ---------------------------------------------------------------------------
+  const ATE_API = "https://ate.wpml.org/api";
+  const SEGMENT_STATUS_UNTRANSLATED = 0;
+  const SEGMENT_STATUS_COMPLETED = 2;
+  const SAVE_CONCURRENCY = 4;
+
+  const md5 = (str) => {
+    const cmn = (q, a, b, x, s, t) => { a = (a + q + x + t) | 0; return (((a << s) | (a >>> (32 - s))) + b) | 0; };
+    const ff = (a, b, c, d, x, s, t) => cmn((b & c) | (~b & d), a, b, x, s, t);
+    const gg = (a, b, c, d, x, s, t) => cmn((b & d) | (c & ~d), a, b, x, s, t);
+    const hh = (a, b, c, d, x, s, t) => cmn(b ^ c ^ d, a, b, x, s, t);
+    const ii = (a, b, c, d, x, s, t) => cmn(c ^ (b | ~d), a, b, x, s, t);
+    const R = [
+      [ff, [7, 12, 17, 22], (i) => i, [-680876936, -389564586, 606105819, -1044525330, -176418897, 1200080426, -1473231341, -45705983, 1770035416, -1958414417, -42063, -1990404162, 1804603682, -40341101, -1502002290, 1236535329]],
+      [gg, [5, 9, 14, 20], (i) => (5 * i + 1) % 16, [-165796510, -1069501632, 643717713, -373897302, -701558691, 38016083, -660478335, -405537848, 568446438, -1019803690, -187363961, 1163531501, -1444681467, -51403784, 1735328473, -1926607734]],
+      [hh, [4, 11, 16, 23], (i) => (3 * i + 5) % 16, [-378558, -2022574463, 1839030562, -35309556, -1530992060, 1272893353, -155497632, -1094730640, 681279174, -358537222, -722521979, 76029189, -640364487, -421815835, 530742520, -995338651]],
+      [ii, [6, 10, 15, 21], (i) => (7 * i) % 16, [-198630844, 1126891415, -1416354905, -57434055, 1700485571, -1894986606, -1051523, -2054922799, 1873313359, -30611744, -1560198380, 1309151649, -145523070, -1120210379, 718787259, -343485551]],
+    ];
+    const bytes = new TextEncoder().encode(str);
+    const n = bytes.length;
+    const blocks = ((n + 8) >>> 6) + 1;
+    const w = new Int32Array(blocks * 16);
+    for (let i = 0; i < n; i++) w[i >> 2] |= bytes[i] << ((i % 4) * 8);
+    w[n >> 2] |= 0x80 << ((n % 4) * 8);
+    w[blocks * 16 - 2] = n * 8;
+    const st = [1732584193, -271733879, -1732584194, 271733878];
+    for (let b = 0; b < blocks; b++) {
+      const k = w.subarray(b * 16, b * 16 + 16);
+      let [a, bb, c, d] = st;
+      for (const [fn, shifts, idx, T] of R) {
+        for (let i = 0; i < 16; i++) {
+          const t = fn(a, bb, c, d, k[idx(i)], shifts[i % 4], T[i]);
+          a = d; d = c; c = bb; bb = t;
+        }
+      }
+      st[0] = (st[0] + a) | 0; st[1] = (st[1] + bb) | 0; st[2] = (st[2] + c) | 0; st[3] = (st[3] + d) | 0;
+    }
+    return st.map((v) => [0, 8, 16, 24].map((s) => ((v >>> s) & 255).toString(16).padStart(2, '0')).join('')).join('');
+  };
+
+  const b64utf8 = (s) => {
+    const bytes = new TextEncoder().encode(s);
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  };
+
+  const hmacSha1Base64 = async (message, key) => {
+    const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(key), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+    const sig = new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(message)));
+    return btoa(String.fromCharCode(...sig));
+  };
+
+  // Same encoding as ATE's Uri.buildQueryString (key order matters for the signature)
+  const buildQuery = (o) => Object.keys(o).map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(o[k])}`).join('&');
+
+  const getJobId = () => new URLSearchParams(location.search).get('id');
+
+  const getAteKeys = (jobId) => {
+    const privateKey = localStorage.getItem(`ate_private_key_${jobId}`);
+    const sharedKey = localStorage.getItem(`ate_shared_key_${jobId}`);
+    if (!privateKey || !sharedKey) throw new Error("ATE keys not found for this job — reload the editor page.");
+    return { privateKey, sharedKey };
+  };
+
+  const ateRequest = async (method, path, params = {}, body = null) => {
+    const jobId = getJobId();
+    const { privateKey, sharedKey } = getAteKeys(jobId);
+    const url = `${ATE_API}/${path}`;
+    const query = { ...params, ui_language_code: 'en', shared_key: sharedKey, uuid: crypto.randomUUID() };
+    const bodyStr = body ? JSON.stringify(body) : null;
+    const signed = bodyStr ? { ...query, body: md5(bodyStr) } : query;
+    const signature = await hmacSha1Base64(`${method.toLowerCase()}${url}?${buildQuery(signed)}`, privateKey);
+    const response = await fetch(`${url}?${buildQuery(query)}&signature=${encodeURIComponent(signature)}`, {
+      method,
+      headers: bodyStr ? { 'Content-Type': 'application/json;charset=UTF-8' } : {},
+      body: bodyStr,
+    });
+    if (!response.ok) throw new Error(`ATE API ${method} ${path} failed: ${response.status}`);
+    return response.json();
+  };
+
+  const fetchJob = () => ateRequest('GET', `jobs/${getJobId()}`, { v: 3, atbd_ignore: false });
+
+  const saveSegmentViaApi = async (segmentId, xliffId, translatedText) => {
+    const totalMarkers = (translatedText.match(/<(g|x)\b/g) || []).length;
+    const res = await ateRequest('POST', `jobs/${getJobId()}/segments/${segmentId}/save`, {}, {
+      changed_markers: 0, // markers are restored verbatim from the source
+      status: SEGMENT_STATUS_COMPLETED,
+      total_markers: totalMarkers,
+      translated_text: b64utf8(translatedText),
+      xliff_id: xliffId,
+    });
+    if (res?.code !== 200) throw new Error(res?.message || "Save rejected");
+    return res;
+  };
+
+  // Segments worth translating: real text (ATE flags code/CSS/number values as
+  // "unclear" and hides them in the editor), still untranslated or just a copy of the source.
+  const needsTranslation = (s) =>
+    !s.unclear &&
+    s.original_content &&
+    !/^<!\[CDATA\[/.test(s.original_content) &&
+    (s.status === SEGMENT_STATUS_UNTRANSLATED || s.translated_content === s.original_content);
+
+  const runLimited = async (items, limit, worker) => {
+    let i = 0;
+    const lanes = Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (i < items.length && !stopRequested) await worker(items[i++]);
+    });
+    await Promise.all(lanes);
+  };
+
+  const translateAllViaApi = async () => {
+    if (!apiKey) {
+      alert("Please configure your OpenRouter API key in the extension popup first.");
+      return;
+    }
+    if (busy) return;
+    busy = true;
+    stopRequested = false;
+    setBusyUI(true);
+    const stats = { done: 0, failed: 0, total: 0 };
+    try {
+      setStatus("Loading job from ATE…");
+      const data = await fetchJob();
+      const job = data.job;
+      const xliffId = job.base_xliff?.id;
+      const segments = data.page_data?.segments || [];
+      if ((data.pages || []).length > 1) console.warn("[AI Translate] Job has multiple pages; only the first page is handled.");
+
+      const langs = {
+        source: job.source_language?.name || getLanguages().source,
+        target: job.target_language?.name || getLanguages().target,
+      };
+      const visible = segments.filter((s) => !s.unclear);
+      segmentIndex = visible.map((s) => ({ id: String(s.id), source: s.original_content }));
+      const todo = visible.filter(needsTranslation).map((s) => ({ id: String(s.id), source: s.original_content, context: s.context || "" }));
+      stats.total = todo.length;
+      console.log(`[AI Translate] API: ${segments.length} segments, ${visible.length} text, ${todo.length} to translate.`, langs);
+      if (!todo.length) {
+        setStatus("Nothing to translate — all segments have a translation.");
+        return;
+      }
+
+      const batches = makeBatches(todo);
+      setStatus(`Translating ${todo.length} segments in ${batches.length} batch(es)…`);
+      const batchPromises = startBatchTranslations(batches, langs);
+
+      for (let b = 0; b < batches.length && !stopRequested; b++) {
+        const res = await batchPromises[b];
+        if (stopRequested) break;
+        if (!res.ok && res.error?.fatal) throw res.error;
+        const translations = res.ok ? res.result : {};
+        if (!res.ok) console.error(`[AI Translate] Batch ${b + 1} failed, falling back to single requests:`, res.error);
+
+        await runLimited(batches[b], SAVE_CONCURRENCY, async (seg) => {
+          try {
+            const text = translations[seg.id] || await translateSingle(seg.source, langs, buildContext(seg.id, seg.context));
+            if (stopRequested) return;
+            await saveSegmentViaApi(seg.id, xliffId, text);
+            stats.done++;
+          } catch (e) {
+            if (e.fatal) throw e;
+            stats.failed++;
+            console.error(`[AI Translate] API segment ${seg.id} failed:`, e);
+          }
+          setStatus(`Saved ${stats.done} / ${stats.total}${stats.failed ? ` (${stats.failed} failed)` : ''}…`);
+        });
+      }
+
+      if (stopRequested) {
+        setStatus(`Stopped. ${stats.done} saved, ${stats.failed} failed. Reload the page to see them.`);
+      } else {
+        setStatus(`Done. ${stats.done} saved${stats.failed ? `, ${stats.failed} failed` : ''}. Reloading editor…`);
+        // The editor UI doesn't know about API saves; reload so it shows them
+        setTimeout(() => location.reload(), 1500);
+      }
+    } catch (e) {
+      stopAll();
+      if (e.name !== 'AbortError') {
+        console.error("[AI Translate] API translate failed:", e);
+        setStatus(`Error: ${e.message}${e.fatal ? ' — check your API key / credits in the extension popup.' : ''} (${stats.done} saved before stopping)`);
+      }
+    } finally {
+      busy = false;
+      setBusyUI(false);
+    }
+  };
+
   const stopAll = () => {
     stopRequested = true;
     activeControllers.forEach((c) => c.abort());
@@ -624,13 +821,15 @@ Output: ONLY the translated text.`;
     panel = document.createElement('div');
     panel.id = 'wai-panel';
     panel.innerHTML = `
-      <span class="wai-title">⚡ AI Translation</span>
+      <span class="wai-title"></span>
       <button class="wai-run wai-all">Translate All</button>
       <button class="wai-run wai-one">Translate Segment</button>
+      <button class="wai-run wai-api" title="Translates and saves through the ATE API directly — fastest, reloads the editor when done">⚡ Fast Translate (API)</button>
       <button class="wai-stop" disabled>Stop</button>
       <span class="wai-status">Ready.</span>`;
     panel.querySelector('.wai-all').addEventListener('click', translateAll);
     panel.querySelector('.wai-one').addEventListener('click', translateCurrent);
+    panel.querySelector('.wai-api').addEventListener('click', translateAllViaApi);
     panel.querySelector('.wai-stop').addEventListener('click', stopAll);
     statusEl = panel.querySelector('.wai-status');
   };
