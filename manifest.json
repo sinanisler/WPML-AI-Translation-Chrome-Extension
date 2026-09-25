@@ -10,7 +10,7 @@
   "content_scripts": [
     {
       "matches": [
-        "*://*.ate.wpml.org/dashboard*"
+        "*://*.ate.wpml.org/*"
       ],
       "js": [
         "content.js"
