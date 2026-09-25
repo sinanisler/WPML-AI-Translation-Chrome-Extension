@@ -1,6 +1,6 @@
 (function () {
   let apiKey = "";
-  let selectedModel = "google/gemini-2.5-flash"; // Default for OpenRouter
+  let selectedModel = "openai/gpt-5.6-luna"; // Default for OpenRouter
   let systemPrompt = ""; // Will be loaded from storage      
 
   // Default system prompt (only used if nothing is saved)
