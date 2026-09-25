@@ -824,7 +824,7 @@ Output: ONLY the translated text.`;
       <span class="wai-title"></span>
       <button class="wai-run wai-all">Translate All</button>
       <button class="wai-run wai-one">Translate Segment</button>
-      <button class="wai-run wai-api" title="Translates and saves through the ATE API directly — fastest, reloads the editor when done">⚡ Fast Translate (API)</button>
+      <button class="wai-run wai-api" title="Translates and saves through the ATE API directly — fastest, reloads the editor when done">Fast Translate (API)</button>
       <button class="wai-stop" disabled>Stop</button>
       <span class="wai-status">Ready.</span>`;
     panel.querySelector('.wai-all').addEventListener('click', translateAll);
