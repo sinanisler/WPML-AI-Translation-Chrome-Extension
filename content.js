@@ -234,8 +234,22 @@ Output: ONLY the translated text.`;
   const textToHtml = (text) =>
     text.split(/\n{2,}/).map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`).join('');
 
+  // Strips script-executing markup from LLM-supplied HTML before it is inserted into the DOM
+  const sanitizeHtml = (html) => {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('script, style, iframe, object, embed, link, meta').forEach((n) => n.remove());
+    doc.querySelectorAll('*').forEach((el) => {
+      [...el.attributes].forEach((attr) => {
+        const isEventAttr = /^on/i.test(attr.name);
+        const isJsUrl = /^(href|src)$/i.test(attr.name) && /^\s*javascript:/i.test(attr.value);
+        if (isEventAttr || isJsUrl) el.removeAttribute(attr.name);
+      });
+    });
+    return doc.body.innerHTML;
+  };
+
   const writeToEditor = (body, html) => {
-    body.innerHTML = html;
+    body.innerHTML = sanitizeHtml(html);
     body.dispatchEvent(new Event('input', { bubbles: true }));
     body.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: ' ' }));
   };
