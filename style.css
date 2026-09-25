@@ -1,116 +1,71 @@
-/* WPML AI Translation Extension Styles */ 
+/* WPML AI Translation Extension Styles */
 
-.otgs-editor-container .translate-wpm-button,
-.otgs-editor-container .auto-translate-button{
-  background: #27ad95;
-  color: white;
-  border: none;
+/* Toolbar sits right under the "Original / Translation" header */
+#wai-panel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 32px 8px;
   padding: 8px 12px;
-  font-size: 14px;
-  font-weight: 500;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-right: 8px;
-  transition: background-color 0.2s ease, opacity 0.2s ease;
-  float: left;
+  background: #1f2327;
+  color: #e9ecef;
+  border: 1px solid #27ad95;
+  border-radius: 6px;
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  flex-shrink: 0;
 }
 
-.otgs-editor-container .translate-wpm-button:hover,
-.otgs-editor-container .auto-translate-button:hover {
+#wai-panel .wai-title {
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+#wai-panel button {
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+#wai-panel .wai-run {
+  background: #27ad95;
+}
+
+#wai-panel .wai-run:hover:not(:disabled) {
   background: #229982;
 }
 
-.otgs-editor-container .translate-wpm-button:disabled,
-.otgs-editor-container .auto-translate-button:disabled{
-  background: #6c757d;
-  cursor: not-allowed;
-  opacity: 0.7;
-  position: relative;
-}
-
-.otgs-editor-container .translate-wpm-button.working,
-.otgs-editor-container .auto-translate-button.working{
-  padding-left: 32px;
-}
-
-.otgs-editor-container .translate-wpm-button.working::before,
-.otgs-editor-container .auto-translate-button.working::before{
-  content: "⚡";
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 16px;
-  animation: rotateIcon 1s linear infinite;
-}
-
-@keyframes rotateIcon {
-  from {
-    transform: translateY(-50%) rotate(0deg);
-  }
-  to {
-    transform: translateY(-50%) rotate(360deg);
-  }
-}
-
-.otgs-editor-container .stop-translation-button{
+#wai-panel .wai-stop {
   background: #dc3545;
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  font-size: 14px;
-  font-weight: 500;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-right: 8px;
-  transition: background-color 0.2s ease;
-  float: left;
 }
 
-.otgs-editor-container .stop-translation-button:hover {
+#wai-panel .wai-stop:hover:not(:disabled) {
   background: #c82333;
 }
 
-/* Button group styling */
-.otgs-editor-container .nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+#wai-panel button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .otgs-editor-container .translate-wpm-button,
-  .otgs-editor-container .auto-translate-button,
-  .otgs-editor-container .stop-translation-button {
-    padding: 6px 10px;
-    font-size: 12px;
-    margin-right: 4px;
-  }
+#wai-panel .wai-status {
+  margin-left: auto;
+  color: #adb5bd;
+  font-size: 12px;
+  word-break: break-word;
 }
 
-/* Loading indicator for buttons */
-.otgs-editor-container .translate-wpm-button.loading,
-.otgs-editor-container .auto-translate-button.loading {
-  position: relative;
-  pointer-events: none;
+#wai-panel.wai-busy .wai-title::after {
+  content: " …";
+  animation: wai-pulse 1s ease-in-out infinite;
 }
 
-.otgs-editor-container .translate-wpm-button.loading::after,
-.otgs-editor-container .auto-translate-button.loading::after {
-  content: '';
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  top: 50%;
-  right: 8px;
-  margin-top: -7px;
-  border: 2px solid #ffffff;
-  border-radius: 50%;
-  border-top-color: transparent;
-  animation: spinner 0.6s linear infinite;
-}
-
-@keyframes spinner {
-  to { transform: rotate(360deg); }
+@keyframes wai-pulse {
+  50% { opacity: 0.3; }
 }

@@ -1,23 +1,24 @@
 // Default system prompt
-const DEFAULT_SYSTEM_PROMPT = `You are a translation tool. Follow these rules strictly:
+const DEFAULT_SYSTEM_PROMPT = `You are a professional website translator. Translate the given text fully and naturally into the target language, the way a native-speaking copywriter would write it for this website.
 
-1. ONLY translate text from the source language to the target language
-2. NEVER add explanations, definitions, etymology, or commentary
-3. Return ONLY the translated text - nothing more
-4. Keep these AS-IS without translation:
-   - Brand names (Nike, Alex, McDonald's, etc.)
-   - Product names and model numbers
-   - URLs, email addresses, and technical identifiers
-   - HTML tags and attributes
-   - Single words that are proper nouns
-   - Text already in the target language
-   - Very short strings (1-2 words) that are ambiguous
+Rules:
+1. Translate EVERY word of normal language, including short labels, single words, headings and list items (e.g. "Vorteile:" -> "Benefits:", "Anwendungen" -> "Applications"). Short text is NOT a reason to leave it untranslated.
+2. Keep exactly as-is: brand names, company and product names, model numbers, personal names, URLs, email addresses, file names, code, CSS class names, IDs, variables and placeholders.
+3. Tokens like ⟦1⟧, ⟦2⟧ are protected placeholders for markup or code. Copy every one of them unchanged, exactly once, in the position that fits the translated sentence. Never translate, remove, merge or add placeholders.
+4. Keep punctuation style, capitalization style (e.g. lowercase stays lowercase), numbers and units consistent with the source.
+5. Only if the text is already entirely in the target language, return it unchanged.
+6. Never add explanations, notes, quotes or language labels.
 
-5. If the text is already in the target language, return it EXACTLY as provided
-6. If uncertain whether something is a name/brand, keep it unchanged
-7. Preserve all formatting, spacing, and HTML structure exactly
+Output: ONLY the translated text.`;
 
-Output format: Return ONLY the translation. No quotes, no language labels, no explanations.`;
+// The pre-2.0 default prompt told the model to skip short strings, which left words
+// untranslated. A stored, unedited copy of it is upgraded to the current default.
+const isLegacyDefaultPrompt = (p) =>
+  /^You are a translation tool. Follow these rules strictly:/.test((p || "").trim()) &&
+  (p || "").includes("Very short strings (1-2 words) that are ambiguous");
+
+const resolvePrompt = (stored) =>
+  !stored || isLegacyDefaultPrompt(stored) ? DEFAULT_SYSTEM_PROMPT : stored;
 
 // Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
@@ -56,7 +57,7 @@ async function loadSavedSettings() {
     ]);
 
     // Load system prompt
-    const systemPrompt = result.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+    const systemPrompt = resolvePrompt(result.systemPrompt);
     document.getElementById('system-prompt').value = systemPrompt;
 
     // Load API key
