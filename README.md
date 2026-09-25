@@ -12,7 +12,7 @@
 </a>
 
 
-A Chrome extension that adds AI-powered translation capabilities to WPML (WordPress Multilingual Plugin) translation pages using OpenAI or OpenRouter APIs.
+A Chrome extension that adds AI-powered translation to the WPML Advanced Translation Editor (ATE), using any model available on OpenRouter.
 
 <img width="610" height="318" alt="image" src="https://github.com/user-attachments/assets/457adcde-cd1a-48d9-8797-cfce38472703" />
 
@@ -22,118 +22,69 @@ A Chrome extension that adds AI-powered translation capabilities to WPML (WordPr
 
 
 
+## What's new in 2.0
 
-## Features
+WPML retired the old translation editor. Version 2.0 is rebuilt for the new editor and is much faster:
 
-### 🚀 Latest Features (v1.2)
-
-#### Dual Provider Support
-- **OpenAI Integration**: Direct access to OpenAI's GPT models
-- **OpenRouter Integration**: Access to multiple AI providers through OpenRouter
-- **Seamless Switching**: Easily switch between providers with separate API key storage
-- **Provider-Specific Models**: Automatically loads available models based on selected provider
-
-#### Advanced Translation Control
-- **Dynamic Model Loading**: Automatically fetches available models from your API provider
-- **Custom System Prompts**: Full control over translation behavior with editable prompts
-- **Intelligent Translation Rules**: Built-in rules to preserve brand names, HTML tags, and proper nouns
-- **Real-time Settings Sync**: Changes apply instantly without page refresh
-
-#### User Interface
-- **Modern Popup Design**: Clean, intuitive interface with proper form validation
-- **API Key Status Indicator**: Visual confirmation when API keys are saved
-- **Model Information Display**: Shows model details like context length and ownership
-- **Provider Selection**: Easy toggle between OpenAI and OpenRouter
-
-#### Core Translation Features
-- **AI Translate**: Translate individual text segments with one click
-- **AI Translate All**: Automatically translate and save multiple segments in sequence
-- **Stop Functionality**: Immediate abort of ongoing translations with proper cleanup
-- **Visual Feedback**: Animated buttons show translation progress
-- **Error Handling**: Clear error messages and validation throughout
+- **Works with the new WPML editor**: the toolbar sits right under the *Original / Translation* language header.
+- **⚡ Fast Translate (API)**: translates and saves the whole job directly through the editor's backend. No clicking through segments, and the editor reloads with everything filled in.
+- **Batch translation**: segments are sent to the AI in batches (about 30 per request, 3 requests in parallel) instead of one request per segment.
+- **Page-aware translations**: the AI gets the page title, each segment's element type (heading, rich text…) and the surrounding text, so terminology stays consistent across the page.
+- **Code-safe**: HTML tags, attributes (class, id, href…), `{{variables}}`, `%s` placeholders, `[shortcodes]`, URLs and emails are locked before translation and restored exactly afterwards. A translation that damages them is rejected and retried. Values WPML flags as code (CSS keywords, numbers…) are skipped.
+- **Improved default prompt**: short labels and headings (e.g. "Vorteile:") get translated too, and names and brands stay as they are.
+- **Reset prompt button**: one click restores the default system prompt.
 
 ## Installation
 
 1. Clone or download this repository
-2. Open Chrome and navigate to `chrome://extensions/`
-3. Enable "Developer mode" in the top right
-4. Click "Load unpacked" and select the extension folder
-5. The extension icon will appear in your Chrome toolbar
+2. Open Chrome and go to `chrome://extensions/`
+3. Enable **Developer mode** (top right)
+4. Click **Load unpacked** and select the extension folder
+5. The extension icon appears in your Chrome toolbar
 
 ## Setup
 
-### Quick Start
+1. Click the extension icon
+2. Enter your OpenRouter API key (get one at [openrouter.ai/keys](https://openrouter.ai/keys)). The model list loads automatically
+3. Pick a model
+4. (Optional) Adjust the system prompt. The ↺ icon resets it to the default
+5. Click **Save All Settings**
 
-1. Click the extension icon in your Chrome toolbar
-2. Choose your preferred provider (OpenAI or OpenRouter)
-3. Enter your API key:
-   - **OpenAI**: Get from [platform.openai.com](https://platform.openai.com/api-keys)
-   - **OpenRouter**: Get from [openrouter.ai/keys](https://openrouter.ai/keys)
-4. The model list will load automatically
-5. Select your preferred AI model from the dropdown
-6. (Optional) Customize the system prompt to control translation behavior
-7. Click "Save All Settings"
-
-### System Prompt Configuration
-
-The extension includes a sophisticated default system prompt that:
-- Ensures clean, translation-only output
-- Preserves brand names, proper nouns, and technical terms
-- Maintains HTML structure and formatting
-- Avoids adding unnecessary explanations or commentary
-
-You can customize this prompt in the settings to match your specific translation needs.
+Settings apply immediately. There's no need to reload the WPML page.
 
 ## Usage
 
-### On WPML Translation Pages
+Open any job in the WPML Advanced Translation Editor (`*.ate.wpml.org`). A toolbar appears under the language header:
 
-1. Navigate to any WPML translation page (`*.ate.wpml.org/dashboard*`)
-2. The extension automatically adds three buttons to the interface:
+| Button | What it does |
+|---|---|
+| **⚡ Fast Translate (API)** | Recommended. Loads all segments, translates them in batches and saves them directly. The editor reloads when done. |
+| **Translate All** | Same batch translation, but fills and saves each segment through the editor UI. Slower, but you can watch it work. |
+| **Translate Segment** | Translates the currently open segment in place without saving, so you can review it first (press ↓ to save). |
+| **Stop** | Cancels running AI requests and stops the loop. |
 
-   - **AI Translate**: Translate the current text segment
-   - **AI Translate All**: Automatically translate all remaining segments sequentially
-   - **Stop**: Immediately stop the auto-translation process
+Segments count as untranslated when they're empty or when their "translation" is still an unchanged copy of the source text. Segments you already translated are never touched.
 
-### Translation Workflow
+**Tips**
+- Don't edit segments while ⚡ Fast Translate is running. The editor only shows the new translations after it reloads.
+- Review the result, then use WPML's **Save and Complete** as usual.
+- If a run is stopped or some segments fail, just run it again. Only the remaining segments are sent.
 
-**Single Translation:**
-1. Review the source text
-2. Click "AI Translate"
-3. The translated text appears in the editor
-4. Review and save manually
+## Models
 
-**Batch Translation:**
-1. Click "AI Translate All"
-2. Watch as segments are translated and saved automatically
-3. Click "Stop" at any time to pause the process
-4. Translation stops immediately with proper cleanup
+Any chat model on OpenRouter works: OpenAI, Anthropic Claude, Google Gemini, Meta Llama and many more.
+**My recommendation is Gemini 3 Flash. Fast, smart, cheap and great at multiple languages!**
 
-## Supported Models
-
-
-### OpenRouter Models
-Access to a wide variety of models from multiple providers:<br>
-OpenRouter supports every model out there.<br>
-- OpenAI models (
-- Anthropic Claude models
-- Google models **(My recommendation is Gemini 3 Flash. Fast, Smart Cheap and Great at MultiLang !)**
-- Meta Llama models
-- And many more providers
-
-The extension displays model context length and other relevant information to help you choose.
+The popup shows each model's context length to help you choose.
 
 ## Requirements
 
-- **Browser**: Chrome or Chromium-based browser
-- **API Access**: Valid API key from either:
-  - OpenAI account with available credits
-  - OpenRouter account with available credits
-- **Website**: Access to WPML translation pages (`*.ate.wpml.org/dashboard*`)
+- Chrome or another Chromium-based browser
+- An OpenRouter account with credits
+- Access to the WPML Advanced Translation Editor (`*.ate.wpml.org`)
 
+## Troubleshooting
 
-- **Modern CSS**: Grid and Flexbox layouts with smooth transitions
-- **Visual Feedback**: Animated buttons with loading states (⚡ icon rotation)
-- **Form Validation**: Input validation before API calls
-- **Accessibility**: Proper ARIA labels and keyboard navigation
-- **Responsive Design**: Mobile-friendly popup interface
+- **Toolbar not visible**: reload the extension in `chrome://extensions/`, then refresh the editor tab.
+- **"status 401 … check your API key"**: the OpenRouter key is wrong or revoked. Update it in the popup.
+- **Details**: open DevTools on the editor page. All extension logs start with `[AI Translate]`.
