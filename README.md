@@ -14,11 +14,8 @@
 
 A Chrome extension that adds AI-powered translation to the WPML Advanced Translation Editor (ATE), using any model available on OpenRouter.
 
-<img width="610" height="318" alt="image" src="https://github.com/user-attachments/assets/457adcde-cd1a-48d9-8797-cfce38472703" />
 
-
-<img width="1896" height="1028" alt="image" src="https://github.com/user-attachments/assets/48ad29de-38f6-4a37-a7c8-ae159ff9646c" />
-
+<img width="1878" height="979" alt="image" src="https://github.com/user-attachments/assets/a75221d3-b79f-48a1-b7b5-9d7fe1eef041" />
 
 
 
