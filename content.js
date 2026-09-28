@@ -687,6 +687,21 @@ Output: ONLY the translated text.`;
 
   const fetchJob = () => ateRequest('GET', `jobs/${getJobId()}`, { v: 3, atbd_ignore: false });
 
+  // The job response only embeds page 0; the rest come from jobs/{job}/pages/{page_number}
+  const fetchPage = (pageNumber) => ateRequest('GET', `jobs/${getJobId()}/pages/${pageNumber}`);
+
+  const fetchAllSegments = async (data) => {
+    const segments = [...(data.page_data?.segments || [])];
+    const firstPage = data.page_data?.page_number ?? 0;
+    for (const p of data.pages || []) {
+      if (p.page_number === firstPage) continue;
+      setStatus(`Loading page ${p.page_number + 1} / ${data.pages.length}…`);
+      const page = await fetchPage(p.page_number);
+      segments.push(...(page.segments || []));
+    }
+    return segments;
+  };
+
   const saveSegmentViaApi = async (segmentId, xliffId, translatedText) => {
     const totalMarkers = (translatedText.match(/<(g|x)\b/g) || []).length;
     const res = await ateRequest('POST', `jobs/${getJobId()}/segments/${segmentId}/save`, {}, {
@@ -731,8 +746,7 @@ Output: ONLY the translated text.`;
       const data = await fetchJob();
       const job = data.job;
       const xliffId = job.base_xliff?.id;
-      const segments = data.page_data?.segments || [];
-      if ((data.pages || []).length > 1) console.warn("[AI Translate] Job has multiple pages; only the first page is handled.");
+      const segments = await fetchAllSegments(data);
 
       const langs = {
         source: job.source_language?.name || getLanguages().source,
