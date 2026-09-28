@@ -1,4 +1,4 @@
-# WPML AI Translation Chrome Extension
+# WPML AI Translation Chrome Extension 
 
 **If you saved time and money with this project. Support it 😉**
 
