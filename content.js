@@ -490,6 +490,7 @@ Output: ONLY the translated text.`;
       setStatus("Scanning segments…");
       const all = await collectSegments();
       segmentIndex = all;
+      if (!all.length) throw new Error("No segments found. The ATE segment markup may have changed; check the console.");
       const todo = all.filter((s) => s.untranslated && s.source);
       stats.total = todo.length;
       console.log(`[AI Translate] ${all.length} segments found, ${todo.length} untranslated.`, langs);
@@ -604,7 +605,8 @@ Output: ONLY the translated text.`;
   //   GET  api/jobs/{job}?v=3                     -> job info + all segments
   //   POST api/jobs/{job}/segments/{seg}/save     -> save one translation
   // ---------------------------------------------------------------------------
-  const ATE_API = "https://ate.wpml.org/api";
+  // Same host as the editor page, so it works on any WPML ATE host (ate.wpml.org, prod-edge-eate.wpml.org, ...)
+  const ATE_API = `${location.origin}/api`;
   const SEGMENT_STATUS_UNTRANSLATED = 0;
   const SEGMENT_STATUS_COMPLETED = 2;
   const SAVE_CONCURRENCY = 4;
@@ -849,10 +851,24 @@ Output: ONLY the translated text.`;
   };
 
   // (Re)inserts the toolbar after the header; React may re-render the header and drop it.
+  // If the header selector stops matching (ATE changed its markup), the toolbar is pinned
+  // to the top of the page instead of silently not appearing.
+  let warnedNoHeader = false;
   const mountPanel = () => {
+    // The extension now runs on every wpml.org page: only ATE job pages (?id=...) get a toolbar
+    if (!getJobId()) return;
     const header = document.querySelector(SEL.header);
-    if (!header) return;
+    if (!header && !document.querySelector(SEL.scroller)) return;
     if (!panel) buildPanel();
+    panel.classList.toggle('wai-floating', !header);
+    if (!header) {
+      if (!warnedNoHeader) {
+        warnedNoHeader = true;
+        console.warn(`[AI Translate] Header not found with selector ${SEL.header}. Toolbar placed at top of page; ATE markup has probably changed.`);
+      }
+      if (panel.parentElement !== document.body) document.body.prepend(panel);
+      return;
+    }
     if (header.nextElementSibling !== panel) header.after(panel);
   };
 

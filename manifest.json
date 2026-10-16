@@ -10,7 +10,8 @@
   "content_scripts": [
     {
       "matches": [
-        "*://*.ate.wpml.org/*"
+        "*://wpml.org/*",
+        "*://*.wpml.org/*"
       ],
       "js": [
         "content.js"

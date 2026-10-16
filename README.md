@@ -51,7 +51,7 @@ Settings apply immediately. There's no need to reload the WPML page.
 
 ## Usage
 
-Open any job in the WPML Advanced Translation Editor (`*.ate.wpml.org`). A toolbar appears under the language header:
+Open any job in the WPML Advanced Translation Editor (any `wpml.org` host, e.g. `ate.wpml.org` or `prod-edge-eate.wpml.org`). A toolbar appears under the language header:
 
 | Button | What it does |
 |---|---|
@@ -78,7 +78,7 @@ The popup shows each model's context length to help you choose.
 
 - Chrome or another Chromium-based browser
 - An OpenRouter account with credits
-- Access to the WPML Advanced Translation Editor (`*.ate.wpml.org`)
+- Access to the WPML Advanced Translation Editor (any `wpml.org` host)
 
 ## Troubleshooting
 

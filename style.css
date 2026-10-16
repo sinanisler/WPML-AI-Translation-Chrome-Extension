@@ -16,6 +16,17 @@
   flex-shrink: 0;
 }
 
+/* Fallback when the header anchor is missing: pinned to the top of the page */
+#wai-panel.wai-floating {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2147483000;
+  margin: 0;
+  border-radius: 0;
+}
+
 #wai-panel .wai-title {
   font-weight: 600;
   margin-right: 4px;
