@@ -605,8 +605,17 @@ Output: ONLY the translated text.`;
   //   GET  api/jobs/{job}?v=3                     -> job info + all segments
   //   POST api/jobs/{job}/segments/{seg}/save     -> save one translation
   // ---------------------------------------------------------------------------
-  // Same host as the editor page, so it works on any WPML ATE host (ate.wpml.org, prod-edge-eate.wpml.org, ...)
-  const ATE_API = `${location.origin}/api`;
+  // The editor UI and its API live on different hosts (e.g. prod-edge-eate.wpml.org and prod-edge-ate.wpml.org).
+  // The API host is in the editor's inline config (`var API_ENDPOINT = '...'`); fall back to the page origin.
+  const readPageConfig = (name) => {
+    const re = new RegExp(`\\bvar\\s+${name}\\s*=\\s*'([^']+)'`);
+    for (const s of document.scripts) {
+      const m = s.textContent.match(re);
+      if (m) return m[1];
+    }
+    return null;
+  };
+  const ATE_API = `${readPageConfig('API_ENDPOINT') || location.origin}/api`;
   const SEGMENT_STATUS_UNTRANSLATED = 0;
   const SEGMENT_STATUS_COMPLETED = 2;
   const SAVE_CONCURRENCY = 4;
