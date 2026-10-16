@@ -31,6 +31,75 @@ function setupEventListeners() {
   document.getElementById('save-settings').addEventListener('click', saveAllSettings);
   document.getElementById('reset-prompt').addEventListener('click', resetSystemPrompt);
   document.getElementById('api-key').addEventListener('input', handleApiKeyInput);
+  setupEditorTools();
+}
+
+// ---------------------------------------------------------------------------
+// Editor tools: talk to the content script in the active ATE tab
+// ---------------------------------------------------------------------------
+async function sendToTab(message) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) return { ok: false, status: 'No active tab.' };
+  try {
+    return await chrome.tabs.sendMessage(tab.id, message);
+  } catch {
+    return { ok: false, status: 'Open an ATE job in this tab (reload it after updating the extension).' };
+  }
+}
+
+async function refreshHealth() {
+  const el = document.getElementById('health');
+  const res = await sendToTab({ type: 'wai-health' });
+  if (!res?.ok) {
+    el.textContent = res?.status || 'Editor not reachable.';
+    el.className = 'health warn';
+    return;
+  }
+  const version = res.ateVersion ? `ATE ${res.ateVersion} · ` : '';
+  const toolbar = res.toolbar ? 'toolbar shown' : 'toolbar not shown';
+  el.textContent = res.problems.length
+    ? `${version}⚠ ${res.problems.join(', ')} · ${toolbar}`
+    : `${version}✔ Editor looks healthy (${res.health.segments} segments visible) · ${toolbar}`;
+  el.className = res.problems.length ? 'health warn' : 'health';
+}
+
+function setupEditorTools() {
+  const tools = document.getElementById('tools');
+  const buttons = [...tools.querySelectorAll('.tool-buttons button')];
+  tools.addEventListener('toggle', () => { if (tools.open) refreshHealth(); });
+
+  const runTool = async (type, workingText) => {
+    buttons.forEach((b) => { b.disabled = true; });
+    showStatus(workingText, 'info');
+    try {
+      const res = await sendToTab({ type });
+      showStatus(res?.status || 'Done.', res?.ok ? 'success' : 'error');
+    } finally {
+      buttons.forEach((b) => { b.disabled = false; });
+      refreshHealth();
+    }
+  };
+
+  document.getElementById('tool-fix').addEventListener('click', () =>
+    runTool('wai-fix', 'Asking AI to diagnose… confirm the suggested fix in the editor tab.'));
+  document.getElementById('tool-undo').addEventListener('click', () =>
+    runTool('wai-undo', 'Restoring previous settings…'));
+  document.getElementById('tool-fast').addEventListener('click', () =>
+    runTool('wai-fast', 'Fast Translate running in the editor tab…'));
+
+  document.getElementById('tool-diag').addEventListener('click', async () => {
+    const res = await sendToTab({ type: 'wai-diagnostics' });
+    if (!res?.ok) {
+      showStatus(res?.status || 'Editor not reachable.', 'error');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(res.diagnostics, null, 2));
+      showStatus('Diagnostics copied (no page text, keys or signatures included).', 'success');
+    } catch {
+      showStatus('Could not access the clipboard.', 'error');
+    }
+  });
 }
 
 // Handle API key input changes

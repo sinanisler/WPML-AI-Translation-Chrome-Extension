@@ -59,11 +59,17 @@ Open any job in the WPML Advanced Translation Editor (any `wpml.org` host, e.g. 
 | **Translate All** | Same batch translation, but fills and saves each segment through the editor UI. Slower, but you can watch it work. |
 | **Translate Segment** | Translates the currently open segment in place without saving, so you can review it first (press ↓ to save). |
 | **Stop** | Cancels running AI requests and stops the loop. |
-| **Fix with AI** | When WPML changes the editor or its API, sends a diagnostics summary to your AI model and proposes a fix. The fix is validated and tested before you confirm it. |
-| **Copy Diagnostics** | Copies the same summary for bug reports. |
+### When WPML changes the editor
+
+Open the extension popup and expand **Editor tools & self-repair** (collapsed by default). It shows a health check of the open editor tab and has these tools, which work even if WPML's page changes so much that the toolbar can't be shown:
+
+| Tool | What it does |
+|---|---|
+| **Fix with AI** | Sends a diagnostics summary to your AI model and proposes a fix. The fix is validated and tested before you confirm it. |
+| **Fast Translate (API)** | Same as the toolbar button; doesn't depend on the page's HTML. |
+| **Copy Diagnostics** | Copies the summary for bug reports. |
 | **Undo Fix** | Restores the settings from before the last AI fix. |
 
-### When WPML changes the editor
 
 Everything that depends on WPML's markup or API (API host, routes, response fields, CSS selectors) lives in one settings object with built-in defaults. A health check runs when the editor opens and warns in the toolbar if something no longer matches, or if the ATE version changed.
 

@@ -192,7 +192,7 @@ Output: ONLY the translated text.`;
 
   const errorHint = (e) => e.fatal
     ? ' — check your API key / credits in the extension popup.'
-    : e.diagnosable ? ' — click "Fix with AI" to diagnose.' : '';
+    : e.diagnosable ? ' — use "Fix with AI" in the extension popup (Editor tools).' : '';
 
   // ---------------------------------------------------------------------------
   // ATE DOM helpers (new React/Virtuoso editor)
@@ -672,7 +672,7 @@ Output: ONLY the translated text.`;
       setStatus(stopRequested
         ? `Stopped. ${stats.done} translated, ${stats.failed} failed.`
         : `Done. ${stats.done} translated${stats.failed ? `, ${stats.failed} failed` : ''}.` +
-          (stats.failed && !stats.done ? ' Click "Fix with AI" if this keeps happening.' : ''));
+          (stats.failed && !stats.done ? ' If this keeps happening, use "Fix with AI" in the extension popup.' : ''));
     } catch (e) {
       stopAll(); // cancel the remaining batch requests
       if (e.name !== 'AbortError') {
@@ -1075,17 +1075,6 @@ Output: ONLY the translated text.`;
     domOutline: domOutline(document.body),
   });
 
-  const copyDiagnostics = async () => {
-    const text = JSON.stringify(collectDiagnostics(), null, 2);
-    try {
-      await navigator.clipboard.writeText(text);
-      setStatus('Diagnostics copied (no page text, keys or signatures included).');
-    } catch {
-      console.log(`[AI Translate] Diagnostics:\n${text}`);
-      setStatus('Clipboard blocked; diagnostics printed to the console.');
-    }
-  };
-
   // Runs once after the toolbar mounts: reports broken pieces and ATE version changes
   const checkHealth = async () => {
     if (busy) return;
@@ -1098,7 +1087,7 @@ Output: ONLY the translated text.`;
       if (version) await chrome.storage.local.set({ lastAteVersion: version });
     } catch {}
     if (busy) return;
-    if (problems.length) setStatus(`${note}⚠ ${problems.join(', ')}. Click "Fix with AI" or "Copy Diagnostics".`);
+    if (problems.length) setStatus(`${note}⚠ ${problems.join(', ')}. Open the extension popup → Editor tools → Fix with AI.`);
     else if (note) setStatus(`${note}Health check OK.`);
   };
 
@@ -1313,8 +1302,10 @@ Patch rules:
   // UI: toolbar placed right under the "Original / Translation" header
   // ---------------------------------------------------------------------------
   let panel, statusEl;
+  let lastStatus = "";
 
   const setStatus = (msg) => {
+    lastStatus = msg;
     if (statusEl) statusEl.textContent = msg;
     console.log(`[AI Translate] ${msg}`);
   };
@@ -1335,17 +1326,11 @@ Patch rules:
       <button class="wai-run wai-one">Translate Segment</button>
       <button class="wai-run wai-api" title="Translates and saves through the ATE API directly — fastest, reloads the editor when done">Fast Translate (API)</button>
       <button class="wai-stop" disabled>Stop</button>
-      <button class="wai-run wai-tool wai-fix" title="Sends a diagnostics summary (no page text or keys) to your AI model and proposes a tested fix">Fix with AI</button>
-      <button class="wai-run wai-tool wai-diag" title="Copies a diagnostics summary for bug reports">Copy Diagnostics</button>
-      <button class="wai-run wai-tool wai-undo" title="Restores the settings from before the last AI fix">Undo Fix</button>
       <span class="wai-status">Ready.</span>`;
     panel.querySelector('.wai-all').addEventListener('click', translateAll);
     panel.querySelector('.wai-one').addEventListener('click', translateCurrent);
     panel.querySelector('.wai-api').addEventListener('click', translateAllViaApi);
     panel.querySelector('.wai-stop').addEventListener('click', stopAll);
-    panel.querySelector('.wai-fix').addEventListener('click', fixWithAi);
-    panel.querySelector('.wai-diag').addEventListener('click', copyDiagnostics);
-    panel.querySelector('.wai-undo').addEventListener('click', undoFix);
     statusEl = panel.querySelector('.wai-status');
     setTimeout(checkHealth, 4000); // give the editor time to render its segment list
   };
@@ -1371,6 +1356,46 @@ Patch rules:
     }
     if (header.nextElementSibling !== panel) header.after(panel);
   };
+
+  // Popup "Editor tools": messages from the extension popup. They don't depend on the
+  // toolbar, so they keep working when WPML's page changes and the toolbar can't be placed.
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (!msg || typeof msg.type !== 'string' || !msg.type.startsWith('wai-')) return;
+    if (!getJobId()) {
+      sendResponse({ ok: false, status: 'This tab is not an ATE job page.' });
+      return;
+    }
+    const toolbarShown = () => !!panel?.isConnected;
+    const run = async (fn) => {
+      if (busy) return { ok: false, status: 'A run is already in progress.' };
+      await fn();
+      // The popup may have closed (e.g. behind a confirm dialog); show the result on the page
+      if (!toolbarShown() && lastStatus) alert(`AI Translation: ${lastStatus}`);
+      return { ok: true, status: lastStatus };
+    };
+    switch (msg.type) {
+      case 'wai-health': {
+        const health = runHealthCheck();
+        sendResponse({
+          ok: true, health, problems: healthProblems(health),
+          ateVersion: readPageConfig('AppVersion'), toolbar: toolbarShown(), busy,
+        });
+        return;
+      }
+      case 'wai-diagnostics':
+        sendResponse({ ok: true, diagnostics: collectDiagnostics() });
+        return;
+      case 'wai-fix':
+        run(fixWithAi).then(sendResponse);
+        return true;
+      case 'wai-undo':
+        run(undoFix).then(sendResponse);
+        return true;
+      case 'wai-fast':
+        run(translateAllViaApi).then(sendResponse);
+        return true;
+    }
+  });
 
   mountPanel();
   new MutationObserver(mountPanel).observe(document.body, { childList: true, subtree: true });
