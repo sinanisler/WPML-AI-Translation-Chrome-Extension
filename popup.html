@@ -245,6 +245,13 @@
       position: relative;
     }
 
+    /* The hover transform makes the button its own stacking context, so lift the
+       whole button above its siblings or they paint over its tooltip */
+    .tool-buttons .button:hover,
+    .tool-buttons .button:focus-visible {
+      z-index: 20;
+    }
+
     /* Custom tooltip from data-tip; right column anchors right so it stays inside the popup */
     .tool-buttons .button[data-tip]::after {
       content: attr(data-tip);
