@@ -53,6 +53,7 @@ Output: ONLY the translated text.`;
   loadSettings();
 
   chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local' && changes.ateAdapter) applyAdapter(changes.ateAdapter.newValue);
     if (namespace !== 'sync') return;
     if (changes.openrouterApiKey) apiKey = changes.openrouterApiKey.newValue || "";
     if (changes.openrouterSelectedModel) selectedModel = changes.openrouterSelectedModel.newValue || selectedModel;
@@ -60,19 +61,142 @@ Output: ONLY the translated text.`;
   });
 
   // ---------------------------------------------------------------------------
+  // Adapter: everything that depends on WPML's markup or API. Built-in defaults below;
+  // an override written by "Fix with AI" (validated, tested and confirmed by the user)
+  // is kept in chrome.storage.local, so a WPML change can be fixed without a release.
+  // ---------------------------------------------------------------------------
+  const DEFAULT_ADAPTER = {
+    // "auto" = API_ENDPOINT from the editor's inline config, else the page origin
+    apiHost: "auto",
+    // Relative to {apiHost}/api
+    routes: {
+      job: "jobs/{job}",
+      page: "jobs/{job}/pages/{page}",
+      save: "jobs/{job}/segments/{seg}/save",
+    },
+    jobParams: { v: 3, atbd_ignore: false },
+    // Dot paths into the API JSON
+    fields: {
+      jobSegments: "page_data.segments",
+      firstPageNumber: "page_data.page_number",
+      pages: "pages",
+      pageNumber: "page_number",
+      pageSegments: "segments",
+      xliffId: "job.base_xliff.id",
+      sourceLanguage: "job.source_language.name",
+      targetLanguage: "job.target_language.name",
+      segmentId: "id",
+      segmentSource: "original_content",
+      segmentTarget: "translated_content",
+      segmentStatus: "status",
+      segmentUnclear: "unclear",
+      segmentContext: "context",
+    },
+    segmentIdAttr: "data-at-segment-id",
+    openedClass: "ate-segment-opened",
+    // Each entry is a list of fallbacks, best first
+    selectors: {
+      scroller: ['[data-virtuoso-scroller]'],
+      segment: ['[data-at-segment-id]'],
+      originalText: ['.AT-segment_list__original .eate-SegmentItem\\.styles__SegmentTextContainer'],
+      translationText: ['.AT-segment_list__translation'],
+      chip: ['.eate-Chip\\.styles__ChipContentStyled'],
+      addButton: ['.AT-segment_list__add_translation_button'],
+      editorIframe: ['iframe.tox-edit-area__iframe'],
+      nextSegment: ['.AT-editor__next_segment'],
+      header: ['[class*="eate-SegmentListHeader.styles__Container"]'],
+      headerLabel: ['.eate-SegmentListHeader\\.styles__SegmentType'],
+    },
+  };
+
+  const isPlainObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+
+  // Deep merge of plain objects; arrays and values from the patch replace the base
+  const mergeAdapter = (base, patch) => {
+    const out = { ...base };
+    for (const [k, v] of Object.entries(patch || {})) {
+      out[k] = isPlainObj(v) && isPlainObj(base[k]) ? mergeAdapter(base[k], v) : v;
+    }
+    return out;
+  };
+
+  let adapter = DEFAULT_ADAPTER;
+  let SEL = {}; // adapter.selectors joined into CSS selector lists
+  const applyAdapter = (override) => {
+    adapter = mergeAdapter(DEFAULT_ADAPTER, override || {});
+    SEL = Object.fromEntries(Object.entries(adapter.selectors)
+      .map(([k, list]) => [k, Array.isArray(list) ? list.join(', ') : String(list)]));
+  };
+  applyAdapter();
+  chrome.storage.local.get('ateAdapter')
+    .then((r) => {
+      if (!r.ateAdapter) return;
+      applyAdapter(r.ateAdapter);
+      console.log('[AI Translate] Using adapter override:', r.ateAdapter);
+    })
+    .catch(() => {});
+
+  const pick = (obj, path) => String(path).split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
+  const F = (name) => adapter.fields[name];
+
+  // ---------------------------------------------------------------------------
+  // Diagnostics data: recent network calls (recorder.js sees the editor's own
+  // requests; ateRequest logs the extension's) and the last error. Secrets are
+  // stripped from URLs and responses are kept only as shapes (keys/types, no values).
+  // ---------------------------------------------------------------------------
+  const SECRET_PARAMS = /^(signature|shared_key|private_key|token|uuid|key)$/i;
+  const sanitizeUrl = (u) => {
+    try {
+      const url = new URL(u, location.href);
+      for (const k of [...url.searchParams.keys()]) if (SECRET_PARAMS.test(k)) url.searchParams.set(k, '…');
+      return url.toString();
+    } catch {
+      return String(u).slice(0, 300);
+    }
+  };
+
+  const shapeOf = (v, depth = 0) => {
+    if (Array.isArray(v)) return v.length ? [shapeOf(v[0], depth + 1), `×${v.length}`] : [];
+    if (isPlainObj(v)) {
+      if (depth > 4) return '{…}';
+      const out = {};
+      Object.keys(v).slice(0, 40).forEach((k) => { out[k] = shapeOf(v[k], depth + 1); });
+      return out;
+    }
+    return v === null ? 'null' : typeof v;
+  };
+
+  const netLog = [];
+  const logNet = (entry) => {
+    netLog.push({ time: new Date().toISOString(), ...entry });
+    if (netLog.length > 40) netLog.shift();
+  };
+  window.addEventListener('message', (e) => {
+    if (e.source !== window || e.data?.source !== 'wai-recorder' || !isPlainObj(e.data.entry)) return;
+    logNet({ ...e.data.entry, from: 'editor' });
+  });
+
+  let lastError = null;
+  const rememberError = (e) => {
+    lastError = { message: e?.message || String(e), status: e?.status, url: e?.url, time: new Date().toISOString() };
+  };
+
+  // Errors that point at a WPML change (not a bad OpenRouter key etc.): "Fix with AI" can help
+  const diagError = (message, url, status) => {
+    const e = new Error(message);
+    e.diagnosable = true;
+    if (url) e.url = sanitizeUrl(url);
+    if (status != null) e.status = status;
+    return e;
+  };
+
+  const errorHint = (e) => e.fatal
+    ? ' — check your API key / credits in the extension popup.'
+    : e.diagnosable ? ' — click "Fix with AI" to diagnose.' : '';
+
+  // ---------------------------------------------------------------------------
   // ATE DOM helpers (new React/Virtuoso editor)
   // ---------------------------------------------------------------------------
-  const SEL = {
-    scroller: '[data-virtuoso-scroller]',
-    segment: '[data-at-segment-id]',
-    originalText: '.AT-segment_list__original .eate-SegmentItem\\.styles__SegmentTextContainer',
-    translationText: '.AT-segment_list__translation',
-    chip: '.eate-Chip\\.styles__ChipContentStyled',
-    addButton: '.AT-segment_list__add_translation_button',
-    editorIframe: 'iframe.tox-edit-area__iframe',
-    nextSegment: '.AT-editor__next_segment',
-    header: '[class*="eate-SegmentListHeader.styles__Container"]',
-  };
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -88,12 +212,13 @@ Output: ONLY the translated text.`;
   };
 
   const getScroller = () => document.querySelector(SEL.scroller);
-  const getSegmentEl = (id) => document.querySelector(`[data-at-segment-id="${id}"]`);
+  const getSegmentEl = (id) => document.querySelector(`[${adapter.segmentIdAttr}="${id}"]`);
+  const isOpened = (el) => typeof el?.className === 'string' && el.className.includes(adapter.openedClass);
 
   // Reads the "Original: German / Translation: English" labels in the segment list header
   const getLanguages = () => {
     const out = { source: "", target: "" };
-    let labels = document.querySelectorAll(`${SEL.header} .eate-SegmentListHeader\\.styles__SegmentType`);
+    let labels = document.querySelector(SEL.header)?.querySelectorAll(SEL.headerLabel) || [];
     if (!labels.length) labels = document.querySelectorAll('div, span, p');
     labels.forEach((el) => {
       if (el.children.length) return;
@@ -110,9 +235,9 @@ Output: ONLY the translated text.`;
     const src = el.querySelector(SEL.originalText);
     const source = src ? src.innerText.trim() : "";
     const saved = el.querySelector(SEL.translationText)?.innerText.trim() || "";
-    const opened = el.className.includes('ate-segment-opened');
+    const opened = isOpened(el);
     return {
-      id: el.dataset.atSegmentId,
+      id: el.getAttribute(adapter.segmentIdAttr),
       source,
       context: el.querySelector(SEL.chip)?.textContent.trim() || "",
       // Needs translating when: "+" is shown (empty), an open editor has nothing saved yet,
@@ -124,7 +249,7 @@ Output: ONLY the translated text.`;
   // Walks the virtualized list top to bottom and collects every segment.
   const collectSegments = async () => {
     const scroller = getScroller();
-    if (!scroller) throw new Error("Segment list not found on this page.");
+    if (!scroller) throw diagError("Segment list not found on this page.");
     const seen = new Map();
     const originalTop = scroller.scrollTop;
     const step = Math.max(300, Math.floor(scroller.clientHeight * 0.8));
@@ -247,7 +372,7 @@ Output: ONLY the translated text.`;
     next.click();
     const ok = await waitFor(() => {
       const el = getSegmentEl(seg.id);
-      return !el || !el.className.includes('ate-segment-opened');
+      return !el || !isOpened(el);
     }, 5000);
     return !!ok;
   };
@@ -490,7 +615,7 @@ Output: ONLY the translated text.`;
       setStatus("Scanning segments…");
       const all = await collectSegments();
       segmentIndex = all;
-      if (!all.length) throw new Error("No segments found. The ATE segment markup may have changed; check the console.");
+      if (!all.length) throw diagError("No segments found. The ATE segment markup may have changed.");
       const todo = all.filter((s) => s.untranslated && s.source);
       stats.total = todo.length;
       console.log(`[AI Translate] ${all.length} segments found, ${todo.length} untranslated.`, langs);
@@ -538,6 +663,7 @@ Output: ONLY the translated text.`;
           } catch (e) {
             if (e.fatal) throw e;
             stats.failed++;
+            rememberError(e);
             console.error(`[AI Translate] Segment ${seg.id} failed:`, e);
           }
         }
@@ -545,12 +671,14 @@ Output: ONLY the translated text.`;
 
       setStatus(stopRequested
         ? `Stopped. ${stats.done} translated, ${stats.failed} failed.`
-        : `Done. ${stats.done} translated${stats.failed ? `, ${stats.failed} failed` : ''}.`);
+        : `Done. ${stats.done} translated${stats.failed ? `, ${stats.failed} failed` : ''}.` +
+          (stats.failed && !stats.done ? ' Click "Fix with AI" if this keeps happening.' : ''));
     } catch (e) {
       stopAll(); // cancel the remaining batch requests
       if (e.name !== 'AbortError') {
+        rememberError(e);
         console.error("[AI Translate] Translate all failed:", e);
-        setStatus(`Error: ${e.message}${e.fatal ? ' — check your API key / credits in the extension popup.' : ''} (${stats.done} translated before stopping)`);
+        setStatus(`Error: ${e.message}${errorHint(e)} (${stats.done} translated before stopping)`);
       }
     } finally {
       busy = false;
@@ -562,7 +690,7 @@ Output: ONLY the translated text.`;
   const translateCurrent = async () => {
     const langs = ensureReady();
     if (!langs || busy) return;
-    const segEl = document.querySelector(`${SEL.segment}.ate-segment-opened`);
+    const segEl = [...document.querySelectorAll(SEL.segment)].find(isOpened);
     const body = getOpenEditorBody(segEl);
     if (!body) {
       alert("Open a segment first (click its + button).");
@@ -588,8 +716,9 @@ Output: ONLY the translated text.`;
       }
     } catch (e) {
       if (e.name !== 'AbortError') {
+        rememberError(e);
         console.error("[AI Translate] Segment translation failed:", e);
-        setStatus(`Error: ${e.message}`);
+        setStatus(`Error: ${e.message}${errorHint(e)}`);
       }
     } finally {
       busy = false;
@@ -615,7 +744,20 @@ Output: ONLY the translated text.`;
     }
     return null;
   };
-  const ATE_API = `${readPageConfig('API_ENDPOINT') || location.origin}/api`;
+  const apiBase = (ad = adapter) =>
+    `${(ad.apiHost && ad.apiHost !== 'auto' ? ad.apiHost : readPageConfig('API_ENDPOINT') || location.origin).replace(/\/+$/, '')}/api`;
+
+  const routePath = (name, vars, ad = adapter) =>
+    ad.routes[name].replace(/\{(\w+)\}/g, (_, k) => encodeURIComponent(vars[k]));
+
+  const STATUS_HINTS = {
+    400: 'request rejected, parameters may have changed',
+    401: 'signature or job keys rejected; reload the editor, if it persists the signing may have changed',
+    403: 'signature or job keys rejected; reload the editor, if it persists the signing may have changed',
+    404: 'route or API host changed',
+    422: 'payload rejected, fields may have changed',
+    500: 'ATE server error',
+  };
   const SEGMENT_STATUS_UNTRANSLATED = 0;
   const SEGMENT_STATUS_COMPLETED = 2;
   const SAVE_CONCURRENCY = 4;
@@ -679,60 +821,83 @@ Output: ONLY the translated text.`;
     return { privateKey, sharedKey };
   };
 
-  const ateRequest = async (method, path, params = {}, body = null) => {
+  const ateRequest = async (method, path, params = {}, body = null, ad = adapter) => {
     const jobId = getJobId();
     const { privateKey, sharedKey } = getAteKeys(jobId);
-    const url = `${ATE_API}/${path}`;
+    const url = `${apiBase(ad)}/${path}`;
     const query = { ...params, ui_language_code: 'en', shared_key: sharedKey, uuid: crypto.randomUUID() };
     const bodyStr = body ? JSON.stringify(body) : null;
     const signed = bodyStr ? { ...query, body: md5(bodyStr) } : query;
     const signature = await hmacSha1Base64(`${method.toLowerCase()}${url}?${buildQuery(signed)}`, privateKey);
-    const response = await fetch(`${url}?${buildQuery(query)}&signature=${encodeURIComponent(signature)}`, {
-      method,
-      headers: bodyStr ? { 'Content-Type': 'application/json;charset=UTF-8' } : {},
-      body: bodyStr,
-    });
-    if (!response.ok) throw new Error(`ATE API ${method} ${path} failed: ${response.status}`);
-    return response.json();
+    let response;
+    try {
+      response = await fetch(`${url}?${buildQuery(query)}&signature=${encodeURIComponent(signature)}`, {
+        method,
+        headers: bodyStr ? { 'Content-Type': 'application/json;charset=UTF-8' } : {},
+        body: bodyStr,
+      });
+    } catch (e) {
+      logNet({ from: 'extension', method, url: sanitizeUrl(url), status: 0, error: e.message });
+      throw diagError(`ATE API ${method} ${path} could not be reached (network/CORS); the API host may have changed.`, url, 0);
+    }
+    if (!response.ok) {
+      logNet({ from: 'extension', method, url: sanitizeUrl(url), status: response.status });
+      throw diagError(`ATE API ${method} ${path} failed: ${response.status} (${STATUS_HINTS[response.status] || 'unexpected response'})`, url, response.status);
+    }
+    const json = await response.json();
+    logNet({ from: 'extension', method, url: sanitizeUrl(url), status: response.status, shape: shapeOf(json) });
+    return json;
   };
 
-  const fetchJob = () => ateRequest('GET', `jobs/${getJobId()}`, { v: 3, atbd_ignore: false });
+  const fetchJob = (ad = adapter) =>
+    ateRequest('GET', routePath('job', { job: getJobId() }, ad), { ...ad.jobParams }, null, ad);
 
-  // The job response only embeds page 0; the rest come from jobs/{job}/pages/{page_number}
-  const fetchPage = (pageNumber) => ateRequest('GET', `jobs/${getJobId()}/pages/${pageNumber}`);
+  // The job response only embeds the first page; the rest come from the page route
+  const fetchPage = (pageNumber, ad = adapter) =>
+    ateRequest('GET', routePath('page', { job: getJobId(), page: pageNumber }, ad), {}, null, ad);
 
   const fetchAllSegments = async (data) => {
-    const segments = [...(data.page_data?.segments || [])];
-    const firstPage = data.page_data?.page_number ?? 0;
-    for (const p of data.pages || []) {
-      if (p.page_number === firstPage) continue;
-      setStatus(`Loading page ${p.page_number + 1} / ${data.pages.length}…`);
-      const page = await fetchPage(p.page_number);
-      segments.push(...(page.segments || []));
+    const segments = [...(pick(data, F('jobSegments')) || [])];
+    const firstPage = pick(data, F('firstPageNumber')) ?? 0;
+    const pages = pick(data, F('pages')) || [];
+    for (const p of pages) {
+      const n = pick(p, F('pageNumber'));
+      if (n === firstPage) continue;
+      setStatus(`Loading page ${n + 1} / ${pages.length}…`);
+      const page = await fetchPage(n);
+      segments.push(...(pick(page, F('pageSegments')) || []));
     }
     return segments;
   };
 
   const saveSegmentViaApi = async (segmentId, xliffId, translatedText) => {
     const totalMarkers = (translatedText.match(/<(g|x)\b/g) || []).length;
-    const res = await ateRequest('POST', `jobs/${getJobId()}/segments/${segmentId}/save`, {}, {
+    const res = await ateRequest('POST', routePath('save', { job: getJobId(), seg: segmentId }), {}, {
       changed_markers: 0, // markers are restored verbatim from the source
       status: SEGMENT_STATUS_COMPLETED,
       total_markers: totalMarkers,
       translated_text: b64utf8(translatedText),
       xliff_id: xliffId,
     });
-    if (res?.code !== 200) throw new Error(res?.message || "Save rejected");
+    if (res?.code !== 200) throw diagError(res?.message || `Save rejected (response: ${JSON.stringify(shapeOf(res))})`);
     return res;
   };
 
   // Segments worth translating: real text (ATE flags code/CSS/number values as
   // "unclear" and hides them in the editor), still untranslated or just a copy of the source.
-  const needsTranslation = (s) =>
-    !s.unclear &&
-    s.original_content &&
-    !/^<!\[CDATA\[/.test(s.original_content) &&
-    (s.status === SEGMENT_STATUS_UNTRANSLATED || s.translated_content === s.original_content);
+  const needsTranslation = (s) => {
+    const src = pick(s, F('segmentSource'));
+    return !pick(s, F('segmentUnclear')) &&
+      src &&
+      !/^<!\[CDATA\[/.test(src) &&
+      (pick(s, F('segmentStatus')) === SEGMENT_STATUS_UNTRANSLATED || pick(s, F('segmentTarget')) === src);
+  };
+
+  const toSegment = (s) => ({
+    id: String(pick(s, F('segmentId'))),
+    source: pick(s, F('segmentSource')),
+    context: pick(s, F('segmentContext')) || "",
+  });
 
   const runLimited = async (items, limit, worker) => {
     let i = 0;
@@ -755,17 +920,21 @@ Output: ONLY the translated text.`;
     try {
       setStatus("Loading job from ATE…");
       const data = await fetchJob();
-      const job = data.job;
-      const xliffId = job.base_xliff?.id;
+      const xliffId = pick(data, F('xliffId'));
       const segments = await fetchAllSegments(data);
+      if (!segments.length) throw diagError("Job loaded but no segments found; the API response format may have changed.");
+      if (!xliffId) throw diagError("Could not read the job's xliff id; the API response format may have changed.");
 
       const langs = {
-        source: job.source_language?.name || getLanguages().source,
-        target: job.target_language?.name || getLanguages().target,
+        source: pick(data, F('sourceLanguage')) || getLanguages().source,
+        target: pick(data, F('targetLanguage')) || getLanguages().target,
       };
-      const visible = segments.filter((s) => !s.unclear);
-      segmentIndex = visible.map((s) => ({ id: String(s.id), source: s.original_content }));
-      const todo = visible.filter(needsTranslation).map((s) => ({ id: String(s.id), source: s.original_content, context: s.context || "" }));
+      const visible = segments.filter((s) => !pick(s, F('segmentUnclear')));
+      if (visible.length && !visible.some((s) => pick(s, F('segmentSource')))) {
+        throw diagError("Segments have no source text field; the API response format may have changed.");
+      }
+      segmentIndex = visible.map(toSegment);
+      const todo = visible.filter(needsTranslation).map(toSegment);
       stats.total = todo.length;
       console.log(`[AI Translate] API: ${segments.length} segments, ${visible.length} text, ${todo.length} to translate.`, langs);
       if (!todo.length) {
@@ -793,6 +962,7 @@ Output: ONLY the translated text.`;
           } catch (e) {
             if (e.fatal) throw e;
             stats.failed++;
+            rememberError(e);
             console.error(`[AI Translate] API segment ${seg.id} failed:`, e);
           }
           setStatus(`Saved ${stats.done} / ${stats.total}${stats.failed ? ` (${stats.failed} failed)` : ''}…`);
@@ -809,8 +979,9 @@ Output: ONLY the translated text.`;
     } catch (e) {
       stopAll();
       if (e.name !== 'AbortError') {
+        rememberError(e);
         console.error("[AI Translate] API translate failed:", e);
-        setStatus(`Error: ${e.message}${e.fatal ? ' — check your API key / credits in the extension popup.' : ''} (${stats.done} saved before stopping)`);
+        setStatus(`Error: ${e.message}${errorHint(e)} (${stats.done} saved before stopping)`);
       }
     } finally {
       busy = false;
@@ -823,6 +994,319 @@ Output: ONLY the translated text.`;
     activeControllers.forEach((c) => c.abort());
     activeControllers.clear();
     setStatus("Stopping…");
+  };
+
+  // ---------------------------------------------------------------------------
+  // Health check + diagnostics bundle (no page text, keys or signatures)
+  // ---------------------------------------------------------------------------
+  const countMatches = (selector) => {
+    try { return document.querySelectorAll(selector).length; } catch { return 'invalid'; }
+  };
+
+  const runHealthCheck = () => {
+    let ateKeys = false;
+    try { getAteKeys(getJobId()); ateKeys = true; } catch {}
+    return {
+      jobId: !!getJobId(),
+      ateKeys,
+      apiBase: apiBase(),
+      header: countMatches(SEL.header),
+      segmentList: countMatches(SEL.scroller),
+      segments: countMatches(SEL.segment),
+    };
+  };
+
+  const healthProblems = (h) => [
+    !h.ateKeys && 'ATE job keys missing',
+    !h.header && 'header not found',
+    !h.segmentList && 'segment list not found',
+    !h.segments && 'no segment rows',
+  ].filter(Boolean);
+
+  // Only these exact UI labels are kept as text in the DOM outline
+  const UI_LABELS = new Set(['Original', 'Translation', 'Translating']);
+
+  const nodeSig = (el) => {
+    let s = el.tagName.toLowerCase();
+    if (el.id && !/\d{3,}/.test(el.id)) s += `#${el.id}`;
+    const cls = typeof el.className === 'string' ? el.className.trim().split(/\s+/).filter(Boolean).slice(0, 6) : [];
+    if (cls.length) s += ` class="${cls.join(' ')}"`;
+    const attrs = [...el.attributes].map((a) => a.name)
+      .filter((n) => n.startsWith('data-') || n === 'role' || n === 'contenteditable');
+    if (attrs.length) s += ` [${attrs.join(' ')}]`;
+    return s;
+  };
+
+  // Indented tag/class/data-* outline of the page; runs of identical siblings are collapsed
+  const domOutline = (root, maxLines = 700) => {
+    const lines = [];
+    const walk = (el, depth) => {
+      if (lines.length >= maxLines || depth > 40) return;
+      if (/^(script|style|svg|noscript|link|meta|iframe)$/i.test(el.tagName) || el.id === 'wai-panel') return;
+      let line = '  '.repeat(depth) + nodeSig(el);
+      const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).join(' ').trim();
+      if (UI_LABELS.has(own)) line += ` "${own}"`;
+      else if (own) line += ' (text)';
+      lines.push(line);
+      const kids = [...el.children];
+      for (let i = 0; i < kids.length; i++) {
+        let j = i;
+        while (j + 1 < kids.length && nodeSig(kids[j + 1]) === nodeSig(kids[i])) j++;
+        walk(kids[i], depth + 1);
+        if (j > i) lines.push(`${'  '.repeat(depth + 1)}… ${j - i} more like the above`);
+        i = j;
+      }
+    };
+    walk(root, 0);
+    return lines.join('\n');
+  };
+
+  const collectDiagnostics = () => ({
+    extensionVersion: chrome.runtime.getManifest().version,
+    ateAppVersion: readPageConfig('AppVersion'),
+    pageConfig: { API_ENDPOINT: readPageConfig('API_ENDPOINT') },
+    page: location.origin + location.pathname,
+    lastError,
+    health: runHealthCheck(),
+    adapter,
+    selectorMatches: Object.fromEntries(Object.entries(adapter.selectors)
+      .map(([k, list]) => [k, list.map((s) => ({ selector: s, matches: countMatches(s) }))])),
+    network: netLog.slice(-30),
+    domOutline: domOutline(document.body),
+  });
+
+  const copyDiagnostics = async () => {
+    const text = JSON.stringify(collectDiagnostics(), null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus('Diagnostics copied (no page text, keys or signatures included).');
+    } catch {
+      console.log(`[AI Translate] Diagnostics:\n${text}`);
+      setStatus('Clipboard blocked; diagnostics printed to the console.');
+    }
+  };
+
+  // Runs once after the toolbar mounts: reports broken pieces and ATE version changes
+  const checkHealth = async () => {
+    if (busy) return;
+    const problems = healthProblems(runHealthCheck());
+    const version = readPageConfig('AppVersion');
+    let note = '';
+    try {
+      const { lastAteVersion } = await chrome.storage.local.get('lastAteVersion');
+      if (version && lastAteVersion && version !== lastAteVersion) note = `ATE updated ${lastAteVersion} → ${version}. `;
+      if (version) await chrome.storage.local.set({ lastAteVersion: version });
+    } catch {}
+    if (busy) return;
+    if (problems.length) setStatus(`${note}⚠ ${problems.join(', ')}. Click "Fix with AI" or "Copy Diagnostics".`);
+    else if (note) setStatus(`${note}Health check OK.`);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Fix with AI: the model sees the diagnostics and may only return a patch to the
+  // adapter. The patch is validated, dry-run tested and shown to the user before
+  // it is stored; "Undo Fix" restores the previous adapter.
+  // ---------------------------------------------------------------------------
+  const FIX_SYSTEM_PROMPT = `You maintain a Chrome extension that automates the WPML Advanced Translation Editor (ATE). WPML changed its page or API and the extension's "adapter" (API host, routes, response field paths, CSS selectors) may no longer match.
+
+You receive diagnostics: the current adapter, how many elements each selector matches, recent network calls made by the editor itself (from: "editor") and by the extension (from: "extension") with method, URL, status and the JSON response shape (keys and types only), the last error, and an outline of the page DOM (tags, classes, data-* attribute names).
+
+Find what changed by comparing the extension's failing calls and selectors with what the editor itself does. Respond with ONLY a JSON object:
+{"diagnosis": "<one or two sentences>", "confidence": "high" | "medium" | "low", "patch": { ...only the adapter keys that must change... }}
+
+Patch rules:
+- Allowed keys: apiHost ("auto" or an https origin on wpml.org, no path), routes.job / routes.page / routes.save (paths relative to {apiHost}/api using {job}, {page}, {seg}), jobParams (query params of the job request), fields.<name> (dot paths into the API JSON), segmentIdAttr (a data-* attribute), openedClass (a class name), selectors.<name> (array of CSS selectors, best first).
+- Only use names that already exist in the current adapter.
+- Every change must be backed by evidence in the diagnostics. If you cannot tell, return an empty patch and explain in diagnosis.
+- For selectors prefer stable hooks (data-* attributes, role) and keep the old selector as a later fallback.
+- editorIframe, nextSegment and addButton only exist while a segment editor is open; translationText and chip may legitimately match nothing. Zero matches there is not a problem by itself.`;
+
+  const OPTIONAL_SELECTORS = new Set(['editorIframe', 'nextSegment', 'addButton', 'translationText', 'chip']);
+
+  const isWpmlOrigin = (u) => {
+    try {
+      const x = new URL(u);
+      return x.protocol === 'https:' && x.pathname === '/' && !x.search &&
+        (x.hostname === 'wpml.org' || x.hostname.endsWith('.wpml.org'));
+    } catch {
+      return false;
+    }
+  };
+
+  const validatePatch = (patch) => {
+    if (!isPlainObj(patch)) return ['patch is not an object'];
+    const errors = [];
+    const checkMap = (key, val, test) => {
+      if (!isPlainObj(val)) return errors.push(`${key} must be an object`);
+      for (const [k, v] of Object.entries(val)) {
+        if (!(k in DEFAULT_ADAPTER[key])) errors.push(`unknown ${key}.${k}`);
+        else {
+          const problem = test(k, v);
+          if (problem) errors.push(`${key}.${k}: ${problem}`);
+        }
+      }
+    };
+    for (const [key, val] of Object.entries(patch)) {
+      switch (key) {
+        case 'apiHost':
+          if (val !== 'auto' && !isWpmlOrigin(val)) errors.push('apiHost must be "auto" or an https wpml.org origin');
+          break;
+        case 'segmentIdAttr':
+          if (typeof val !== 'string' || !/^data-[a-z0-9-]+$/.test(val)) errors.push('segmentIdAttr must be a data-* attribute');
+          break;
+        case 'openedClass':
+          if (typeof val !== 'string' || !/^[\w-]+$/.test(val)) errors.push('openedClass must be a class name');
+          break;
+        case 'jobParams':
+          if (!isPlainObj(val) || Object.values(val).some((v) => !['string', 'number', 'boolean'].includes(typeof v))) {
+            errors.push('jobParams must be an object of simple values');
+          }
+          break;
+        case 'routes':
+          checkMap('routes', val, (k, v) => {
+            if (typeof v !== 'string' || /:\/\/|\.\.|^\/|[?#\s]/.test(v)) return 'must be a relative path';
+            if (!v.includes('{job}')) return 'must contain {job}';
+            if (k === 'page' && !v.includes('{page}')) return 'must contain {page}';
+            if (k === 'save' && !v.includes('{seg}')) return 'must contain {seg}';
+            return null;
+          });
+          break;
+        case 'fields':
+          checkMap('fields', val, (k, v) => (typeof v === 'string' && /^[\w.]+$/.test(v) ? null : 'must be a dot path'));
+          break;
+        case 'selectors':
+          checkMap('selectors', val, (k, v) => {
+            if (!Array.isArray(v) || !v.length || v.length > 6) return 'must be a list of 1-6 selectors';
+            for (const s of v) {
+              if (typeof s !== 'string' || s.length > 300) return 'invalid selector';
+              try { document.querySelector(s); } catch { return `invalid CSS: ${s}`; }
+            }
+            return null;
+          });
+          break;
+        default:
+          errors.push(`unknown key ${key}`);
+      }
+    }
+    return errors;
+  };
+
+  const normalizePatch = (p) => (p.apiHost && p.apiHost !== 'auto' ? { ...p, apiHost: new URL(p.apiHost).origin } : p);
+
+  // Read-only checks of a candidate adapter; writes (the save route) are never tested
+  const dryRun = async (candidate, patch) => {
+    const results = [];
+    for (const k of Object.keys(patch.selectors || {})) {
+      const n = countMatches(candidate.selectors[k].join(', '));
+      results.push({ check: `selector ${k}`, ok: n > 0 || OPTIONAL_SELECTORS.has(k), detail: `${n} match(es)` });
+    }
+    if (patch.segmentIdAttr) {
+      const n = countMatches(`[${candidate.segmentIdAttr}]`);
+      results.push({ check: 'segmentIdAttr', ok: n > 0, detail: `${n} element(s)` });
+    }
+    if (patch.apiHost || patch.routes?.job || patch.routes?.page || patch.jobParams || patch.fields) {
+      try {
+        const data = await fetchJob(candidate);
+        const segs = pick(data, candidate.fields.jobSegments);
+        results.push({
+          check: 'load job via API',
+          ok: Array.isArray(segs) && segs.length > 0,
+          detail: Array.isArray(segs) ? `${segs.length} segments on the first page` : 'no segment list at fields.jobSegments',
+        });
+        if (patch.routes?.page) {
+          const pages = pick(data, candidate.fields.pages) || [];
+          const n = pages.length ? pick(pages[0], candidate.fields.pageNumber) : 0;
+          await fetchPage(n, candidate);
+          results.push({ check: 'load page via API', ok: true, detail: `page ${n}` });
+        }
+      } catch (e) {
+        results.push({ check: 'API read', ok: false, detail: e.message });
+      }
+    }
+    if (patch.routes?.save) {
+      results.push({ check: 'save route', ok: null, detail: 'not tested (it would write data); confirm manually' });
+    }
+    return results;
+  };
+
+  const fixWithAi = async () => {
+    if (!apiKey) {
+      alert("Please configure your OpenRouter API key in the extension popup first.");
+      return;
+    }
+    if (busy) return;
+    busy = true;
+    stopRequested = false;
+    setBusyUI(true);
+    try {
+      setStatus('Asking AI to diagnose…');
+      const reply = parseJsonLoose(await callOpenRouter([
+        { role: 'system', content: FIX_SYSTEM_PROMPT },
+        { role: 'user', content: JSON.stringify(collectDiagnostics()) },
+      ], { response_format: { type: 'json_object' } }));
+      console.log('[AI Translate] AI diagnosis:', reply);
+      const patch = reply.patch || {};
+      if (!isPlainObj(patch) || !Object.keys(patch).length) {
+        setStatus(`AI: ${reply.diagnosis || 'no change suggested.'}`);
+        return;
+      }
+      const errors = validatePatch(patch);
+      if (errors.length) {
+        setStatus(`AI suggestion rejected: ${errors.join('; ')}`);
+        return;
+      }
+      const clean = normalizePatch(patch);
+      setStatus('Testing the suggested fix…');
+      const results = await dryRun(mergeAdapter(adapter, clean), clean);
+      const failed = results.some((r) => r.ok === false);
+      const summary = [
+        `AI diagnosis (${reply.confidence || 'unknown'} confidence): ${reply.diagnosis || ''}`,
+        '',
+        'Suggested change:',
+        JSON.stringify(clean, null, 2),
+        '',
+        'Test results:',
+        ...(results.length ? results.map((r) => `${r.ok === true ? '✔' : r.ok === false ? '✘' : '?'} ${r.check}: ${r.detail}`) : ['(nothing testable)']),
+        '',
+        failed ? 'Some tests FAILED. Apply anyway?' : 'Apply this fix?',
+      ].join('\n');
+      if (!confirm(summary)) {
+        setStatus('AI fix not applied.');
+        return;
+      }
+      const { ateAdapter: prev } = await chrome.storage.local.get('ateAdapter');
+      const override = mergeAdapter(prev || {}, clean);
+      await chrome.storage.local.set({ ateAdapter: override, ateAdapterPrev: prev || {} });
+      applyAdapter(override);
+      setStatus('Fix applied. Try again; "Undo Fix" restores the previous settings.');
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.error('[AI Translate] Fix with AI failed:', e);
+        setStatus(`Fix with AI failed: ${e.message}`);
+      }
+    } finally {
+      busy = false;
+      setBusyUI(false);
+    }
+  };
+
+  const undoFix = async () => {
+    if (busy) return;
+    try {
+      const { ateAdapter, ateAdapterPrev } = await chrome.storage.local.get(['ateAdapter', 'ateAdapterPrev']);
+      if (!ateAdapter) {
+        setStatus('Already using the built-in settings.');
+        return;
+      }
+      const restore = ateAdapterPrev && Object.keys(ateAdapterPrev).length ? ateAdapterPrev : null;
+      if (restore) await chrome.storage.local.set({ ateAdapter: restore });
+      else await chrome.storage.local.remove('ateAdapter');
+      await chrome.storage.local.remove('ateAdapterPrev');
+      applyAdapter(restore);
+      setStatus(restore ? 'Restored the previous settings.' : 'Restored the built-in settings.');
+    } catch (e) {
+      setStatus(`Undo failed: ${e.message}`);
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -851,12 +1335,19 @@ Output: ONLY the translated text.`;
       <button class="wai-run wai-one">Translate Segment</button>
       <button class="wai-run wai-api" title="Translates and saves through the ATE API directly — fastest, reloads the editor when done">Fast Translate (API)</button>
       <button class="wai-stop" disabled>Stop</button>
+      <button class="wai-run wai-tool wai-fix" title="Sends a diagnostics summary (no page text or keys) to your AI model and proposes a tested fix">Fix with AI</button>
+      <button class="wai-run wai-tool wai-diag" title="Copies a diagnostics summary for bug reports">Copy Diagnostics</button>
+      <button class="wai-run wai-tool wai-undo" title="Restores the settings from before the last AI fix">Undo Fix</button>
       <span class="wai-status">Ready.</span>`;
     panel.querySelector('.wai-all').addEventListener('click', translateAll);
     panel.querySelector('.wai-one').addEventListener('click', translateCurrent);
     panel.querySelector('.wai-api').addEventListener('click', translateAllViaApi);
     panel.querySelector('.wai-stop').addEventListener('click', stopAll);
+    panel.querySelector('.wai-fix').addEventListener('click', fixWithAi);
+    panel.querySelector('.wai-diag').addEventListener('click', copyDiagnostics);
+    panel.querySelector('.wai-undo').addEventListener('click', undoFix);
     statusEl = panel.querySelector('.wai-status');
+    setTimeout(checkHealth, 4000); // give the editor time to render its segment list
   };
 
   // (Re)inserts the toolbar after the header; React may re-render the header and drop it.

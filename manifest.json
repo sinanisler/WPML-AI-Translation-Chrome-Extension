@@ -20,6 +20,17 @@
         "style.css"
       ],
       "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "*://wpml.org/*",
+        "*://*.wpml.org/*"
+      ],
+      "js": [
+        "recorder.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   "action": {

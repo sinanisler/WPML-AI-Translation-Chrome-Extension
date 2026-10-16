@@ -51,6 +51,14 @@
   background: #229982;
 }
 
+#wai-panel .wai-tool {
+  background: #495057;
+}
+
+#wai-panel .wai-tool:hover:not(:disabled) {
+  background: #3d4349;
+}
+
 #wai-panel .wai-stop {
   background: #dc3545;
 }

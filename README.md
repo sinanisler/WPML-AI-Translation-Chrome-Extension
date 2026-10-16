@@ -59,6 +59,15 @@ Open any job in the WPML Advanced Translation Editor (any `wpml.org` host, e.g. 
 | **Translate All** | Same batch translation, but fills and saves each segment through the editor UI. Slower, but you can watch it work. |
 | **Translate Segment** | Translates the currently open segment in place without saving, so you can review it first (press ↓ to save). |
 | **Stop** | Cancels running AI requests and stops the loop. |
+| **Fix with AI** | When WPML changes the editor or its API, sends a diagnostics summary to your AI model and proposes a fix. The fix is validated and tested before you confirm it. |
+| **Copy Diagnostics** | Copies the same summary for bug reports. |
+| **Undo Fix** | Restores the settings from before the last AI fix. |
+
+### When WPML changes the editor
+
+Everything that depends on WPML's markup or API (API host, routes, response fields, CSS selectors) lives in one settings object with built-in defaults. A health check runs when the editor opens and warns in the toolbar if something no longer matches, or if the ATE version changed.
+
+**Fix with AI** sends a diagnostics summary to your model: the editor's own recent API calls (URLs with keys and signatures removed, responses as key/type shapes only), selector match counts, the last error and a tag/class outline of the page. No translation text, keys or signatures are included. The model can only suggest changes to that settings object, limited to `wpml.org` hosts. The extension then tests the change with read-only requests and shows you the result before anything is applied. Save routes are never tested automatically.
 
 Segments count as untranslated when they're empty or when their "translation" is still an unchanged copy of the source text. Segments you already translated are never touched.
 
